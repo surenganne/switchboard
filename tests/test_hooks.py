@@ -157,6 +157,24 @@ class HooksTest(unittest.TestCase):
         self.pretool("Skill", {"skill": "not-installed"})
         self.assertEqual(self.usage_ids(), [])
 
+    def test_session_with_recording_off_restarts_window(self):
+        self.fixture_session()
+        self.assertTrue((self.sb / "first_seen.json").exists())
+        (self.sb / "settings.json").write_text(json.dumps({"record_usage": False}))
+        self.session()
+        self.assertFalse((self.sb / "first_seen.json").exists())
+
+    def test_usage_falls_back_to_live_scan(self):
+        self.fixture_session()
+        # another project's session start overwrote the shared inventory
+        (self.sb / "inventory.json").write_text(json.dumps({"version": 1, "skills": {}}))
+        self.pretool("Skill", {"skill": "delta"})
+        self.prompt("try /alpha")
+        ids = self.usage_ids()
+        self.assertEqual(len(ids), 2)
+        self.assertTrue(ids[0].startswith("project:") and ids[0].endswith(":delta"))
+        self.assertEqual(ids[1], "user:alpha")
+
     def test_prompt_logs_named(self):
         self.fixture_session()
         self.prompt("run /alpha on src/x and /Users/me/file")

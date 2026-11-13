@@ -44,6 +44,8 @@ try:
         scan_claude.write_inventory(list(inv.values()))
         if usage.recording_on():
             usage.note_seen(list(inv))
+        else:
+            usage.clear_seen()
         pending = profiles.pending(inv)
         n_pending = len(pending) if pending and pending_is_news(pending) else 0
         msg = message(route.overlap_categories(profiles.load_all(), inv), n_pending)

@@ -13,6 +13,9 @@ Call the switchboard `hygiene` tool (pass `days` only if the user gave a window,
   "Skill list today ≈ `tokens_now` tokens; after these suggestions ≈ `tokens_after` (estimate; skills and commands
   only, not agents, MCP tools or hooks)." If every list is empty, say nothing went unused in the window.
 
+Always warn, next to the plugin list: turning a plugin off also removes its MCP tools, agents and hooks, which
+hygiene does not track, so check a plugin is not kept for those (a memory or context tool, safety hooks) first.
+
 Tell the user they can turn a plugin off with `/plugin` (or ask Claude to set it to false under `enabledPlugins`
 in their settings), and remove or move a user/project skill's folder to drop it. Do not turn anything off yourself
 unless they ask.

@@ -42,8 +42,8 @@ try:
         if tool != "Skill":
             return
         skill = str((event.get("tool_input") or {}).get("skill") or "")
-        used = usage.resolve(skill, usage.cached_inventory()) if skill else None
-        usage.record([used] if used else [])
+        if usage.recording_on():
+            usage.record(usage.resolve_ids([skill]))
         if not skill or now - float(state.get("routed_at", 0)) <= WINDOW:
             return
         if skill in (state.get("named") or []):  # the user asked for this skill by name: never second-guess them

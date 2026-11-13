@@ -191,7 +191,10 @@ Skill list today ≈ 28,700 tokens; after these suggestions ≈ 7,350 (estimate;
 ```
 
 Skills first seen inside the window are never suggested. Switchboard does not turn anything off: use
-`/plugin`, or ask Claude. Plugin skills can only be turned off with their whole plugin.
+`/plugin`, or ask Claude. Plugin skills can only be turned off with their whole plugin, and turning a plugin off
+also removes its MCP tools, agents and hooks, which hygiene does not track. Check a plugin is not kept for those
+before you disable it. Turning `record_usage` off clears the first-seen dates, so the window restarts when you
+turn it back on.
 
 ### `/switchboard:forget`
 

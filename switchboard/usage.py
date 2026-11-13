@@ -26,12 +26,32 @@ def recording_on() -> bool:
 
 
 def cached_inventory() -> dict:
-    """shortcut: uses the last session's inventory, so a skill installed mid-session is logged from the next session"""
     try:
         skills = json.loads((paths.home() / "inventory.json").read_text()).get("skills")
     except (OSError, ValueError, AttributeError):
         return {}
     return skills if isinstance(skills, dict) else {}
+
+
+def resolve_ids(names) -> list:
+    """Installed ids for the names, from the cached inventory; a live scan only for names it misses (the shared
+    inventory.json may belong to another project's session)."""
+    from switchboard import scan_claude
+    names = [n for n in names if isinstance(n, str) and n]
+    inv = cached_inventory()
+    ids = [resolve(n, inv) for n in names]
+    if None in ids:
+        live = scan_claude.current()
+        ids = [i or resolve(n, live) for n, i in zip(names, ids)]
+    return [i for i in ids if i]
+
+
+def clear_seen() -> None:
+    """Recording is off: drop first-seen dates so the window restarts when it is turned back on."""
+    try:
+        _seen().unlink()
+    except FileNotFoundError:
+        pass
 
 
 def resolve(name: str, inv: dict):
