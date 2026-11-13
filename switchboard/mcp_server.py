@@ -7,9 +7,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from switchboard import choices, profiles, route, scan_claude  # noqa: E402
+from switchboard import choices, profiles, report, route, scan_claude  # noqa: E402
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")  # newest first; the subset this server speaks
 OBJ = {"type": "object"}
 STRS = {"type": "array", "items": {"type": "string"}}
@@ -39,6 +39,8 @@ TOOLS = [
     {"name": "status", "description": "Counts of skills, profiles, pending and overlapping categories.", "inputSchema": schema()},
     {"name": "audit", "description": "Task types where the user keeps passing over the top pick.", "inputSchema": schema()},
     {"name": "forget", "description": "Delete the local choice log.", "inputSchema": schema()},
+    {"name": "report", "description": "Write a local HTML activity report to ~/.switchboard/report.html and return its path.",
+     "inputSchema": schema()},
 ]
 
 
@@ -69,6 +71,10 @@ def call_tool(name: str, args: dict):
         return {"groups": choices.audit()}
     if name == "forget":
         return {"removed": choices.forget()}
+    if name == "report":
+        inv, profs = inventory(), profiles.load_all()
+        path = report.write(inv, profs)
+        return {"path": str(path), "skills": len(inv), "picks": report.summarise(inv, profs, choices.rows())["picks"]}
     raise LookupError(f"unknown tool: {name}")
 
 

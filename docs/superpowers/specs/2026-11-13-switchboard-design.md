@@ -102,7 +102,7 @@ that need fixing. `/switchboard:forget` clears the file; a setting turns recordi
 
 ### 5. Commands
 `/switchboard:profile`, `/switchboard:status` (counts, unprofiled, overlap categories),
-`/switchboard:audit`, `/switchboard:forget`.
+`/switchboard:audit`, `/switchboard:forget`, `/switchboard:report` (added in v0.2, see below).
 
 ## Data and privacy
 
@@ -149,3 +149,13 @@ and with the user's go-ahead at that moment:
 
 File layout inside the plugin, MCP framing details, scoring weights, exact tag vocabularies (start from the
 lists above), test layout.
+
+## Addendum (v0.2): local activity report
+
+`/switchboard:report` calls the `report` MCP tool, which writes `~/.switchboard/report.html` (0600) from
+`inventory`, `profiles/` and `choices.jsonl` and returns its path. One static page: no JavaScript, no
+external resources, every skill id and source HTML-escaped (skill text is untrusted). It shows summary
+tiles, picks per week (up to 26 weeks), most chosen skills (chosen / offered), picks and overrides by
+category, the `audit` groups, and profiling coverage by source. Light and dark themes follow the system
+setting and use the Minfy blue and yellow palette. Same privacy rules as the rest of Switchboard: local only,
+built only on request, no prompt text because none is stored.
