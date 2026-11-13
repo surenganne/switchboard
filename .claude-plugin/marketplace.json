@@ -1,0 +1,14 @@
+{
+  "name": "switchboard",
+  "owner": {
+    "name": "Switchboard contributors"
+  },
+  "description": "Switchboard: route between overlapping Claude Code skills.",
+  "plugins": [
+    {
+      "name": "switchboard",
+      "source": "./",
+      "description": "Picks the right installed skill for the task when several overlap."
+    }
+  ]
+}

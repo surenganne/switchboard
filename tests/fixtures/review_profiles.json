@@ -1,0 +1,203 @@
+{
+ "inventory": {
+  "user:review": {
+   "id": "user:review",
+   "name": "review",
+   "source": "user",
+   "kind": "skill",
+   "path": "/fixture/user:review",
+   "description": "Pre-landing PR review against the base branch.",
+   "content_hash": "h-user-review000"
+  },
+  "ecc:code-review": {
+   "id": "ecc:code-review",
+   "name": "code-review",
+   "source": "ecc",
+   "kind": "skill",
+   "path": "/fixture/ecc:code-review",
+   "description": "Security-first review of local changes or a PR.",
+   "content_hash": "h-ecc-code-revi0"
+  },
+  "ponytail:ponytail-review": {
+   "id": "ponytail:ponytail-review",
+   "name": "ponytail-review",
+   "source": "ponytail",
+   "kind": "skill",
+   "path": "/fixture/ponytail:ponytail-review",
+   "description": "Quick pass for bloat and bugs.",
+   "content_hash": "h-ponytail-pony0"
+  },
+  "builtin:code-review": {
+   "id": "builtin:code-review",
+   "name": "code-review",
+   "source": "builtin",
+   "kind": "skill",
+   "path": "/fixture/builtin:code-review",
+   "description": "Built-in correctness review of the diff.",
+   "content_hash": "h-builtin-code-0"
+  },
+  "ecc:review-pr": {
+   "id": "ecc:review-pr",
+   "name": "review-pr",
+   "source": "ecc",
+   "kind": "skill",
+   "path": "/fixture/ecc:review-pr",
+   "description": "Multi-agent PR review.",
+   "content_hash": "h-ecc-review-pr0"
+  },
+  "ecc:orch-review": {
+   "id": "ecc:orch-review",
+   "name": "orch-review",
+   "source": "ecc",
+   "kind": "skill",
+   "path": "/fixture/ecc:orch-review",
+   "description": "Orchestrated review workflow.",
+   "content_hash": "h-ecc-orch-revi0"
+  }
+ },
+ "profiles": {
+  "user:review": {
+   "id": "user:review",
+   "source": "user",
+   "content_hash": "h-user-review000",
+   "categories": [
+    "code-review"
+   ],
+   "does": "Pre-landing PR review against the base branch.",
+   "targets": [
+    "pr"
+   ],
+   "focus": [
+    "merge-readiness",
+    "correctness"
+   ],
+   "depth": "thorough",
+   "cost": "single-pass",
+   "stack": [
+    "any"
+   ],
+   "best_for": [],
+   "not_for": []
+  },
+  "ecc:code-review": {
+   "id": "ecc:code-review",
+   "source": "ecc",
+   "content_hash": "h-ecc-code-revi0",
+   "categories": [
+    "code-review"
+   ],
+   "does": "Security-first review of local changes or a PR.",
+   "targets": [
+    "local-diff",
+    "pr"
+   ],
+   "focus": [
+    "security",
+    "correctness"
+   ],
+   "depth": "standard",
+   "cost": "single-pass",
+   "stack": [
+    "any"
+   ],
+   "best_for": [],
+   "not_for": []
+  },
+  "ponytail:ponytail-review": {
+   "id": "ponytail:ponytail-review",
+   "source": "ponytail",
+   "content_hash": "h-ponytail-pony0",
+   "categories": [
+    "code-review"
+   ],
+   "does": "Quick pass for bloat and bugs.",
+   "targets": [
+    "local-diff",
+    "files",
+    "pr"
+   ],
+   "focus": [
+    "bloat",
+    "correctness",
+    "performance"
+   ],
+   "depth": "quick",
+   "cost": "single-pass",
+   "stack": [
+    "any"
+   ],
+   "best_for": [],
+   "not_for": []
+  },
+  "builtin:code-review": {
+   "id": "builtin:code-review",
+   "source": "builtin",
+   "content_hash": "h-builtin-code-0",
+   "categories": [
+    "code-review"
+   ],
+   "does": "Built-in correctness review of the diff.",
+   "targets": [
+    "local-diff",
+    "pr"
+   ],
+   "focus": [
+    "correctness"
+   ],
+   "depth": "standard",
+   "cost": "single-pass",
+   "stack": [
+    "any"
+   ],
+   "best_for": [],
+   "not_for": []
+  },
+  "ecc:review-pr": {
+   "id": "ecc:review-pr",
+   "source": "ecc",
+   "content_hash": "h-ecc-review-pr0",
+   "categories": [
+    "code-review"
+   ],
+   "does": "Multi-agent PR review.",
+   "targets": [
+    "pr"
+   ],
+   "focus": [
+    "correctness",
+    "security",
+    "tests"
+   ],
+   "depth": "thorough",
+   "cost": "multi-agent",
+   "stack": [
+    "any"
+   ],
+   "best_for": [],
+   "not_for": []
+  },
+  "ecc:orch-review": {
+   "id": "ecc:orch-review",
+   "source": "ecc",
+   "content_hash": "h-ecc-orch-revi0",
+   "categories": [
+    "code-review"
+   ],
+   "does": "Orchestrated review workflow.",
+   "targets": [
+    "pr",
+    "local-diff"
+   ],
+   "focus": [
+    "correctness"
+   ],
+   "depth": "thorough",
+   "cost": "workflow",
+   "stack": [
+    "any"
+   ],
+   "best_for": [],
+   "not_for": []
+  }
+ }
+}
