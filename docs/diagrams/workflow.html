@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How Switchboard works</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper: #F5F5F5;
+      --color-ink:   #0A2540;
+      --color-muted: #5f6b7a;
+      --font-sans:  'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --font-serif: 'Instrument Serif', Georgia, serif;
+      --font-mono:  'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink);
+           min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500; letter-spacing: 0.18em;
+               text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem); font-weight: 400;
+         letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 1048px; display: block; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Data flow · Switchboard</p>
+    <h1>How Switchboard works</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 1048 456" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="workflow-title workflow-desc">
+        <title id="workflow-title">How Switchboard works</title>
+        <desc id="workflow-desc">Switchboard scans installed skills, Claude profiles them, and for each task the local route tool ranks overlapping skills so you pick one; your pick is logged locally and feeds the report.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5f6b7a"/></marker>
+          <marker id="arrow-focal" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0A2540"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1A3A5C"/></marker>
+          <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="11" cy="11" r="0.8" fill="rgba(10,37,64,0.10)"/></pattern>
+        </defs>
+
+        <!-- Background -->
+        <rect width="1048" height="456" fill="#F5F5F5"/>
+        <rect width="1048" height="456" fill="url(#dots)"/>
+        <rect x="0" y="48" width="1048" height="112" fill="rgba(249,198,66,0.08)"/>
+        <line x1="0" y1="48" x2="1048" y2="48" stroke="rgba(10,37,64,0.12)" stroke-width="0.8"/>
+        <line x1="0" y1="160" x2="1048" y2="160" stroke="rgba(10,37,64,0.12)" stroke-width="0.8"/>
+        <line x1="0" y1="272" x2="1048" y2="272" stroke="rgba(10,37,64,0.12)" stroke-width="0.8"/>
+        <line x1="0" y1="384" x2="1048" y2="384" stroke="rgba(10,37,64,0.12)" stroke-width="0.8"/>
+        <line x1="140" y1="48" x2="140" y2="384" stroke="rgba(10,37,64,0.12)" stroke-width="0.8"/>
+
+        <!-- Step header -->
+        <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">
+          <rect x="212" y="8" width="32" height="16" rx="8" fill="rgba(10,37,64,0.10)"/>
+          <text x="228" y="20" font-size="10" font-weight="600" fill="#0A2540">01</text>
+          <text x="228" y="40" font-size="10" letter-spacing="0.14em" fill="#5f6b7a">SCAN</text>
+          <rect x="388" y="8" width="32" height="16" rx="8" fill="rgba(10,37,64,0.10)"/>
+          <text x="404" y="20" font-size="10" font-weight="600" fill="#0A2540">02</text>
+          <text x="404" y="40" font-size="10" letter-spacing="0.14em" fill="#5f6b7a">PROFILE</text>
+          <rect x="564" y="8" width="32" height="16" rx="8" fill="rgba(10,37,64,0.10)"/>
+          <text x="580" y="20" font-size="10" font-weight="600" fill="#0A2540">03</text>
+          <text x="580" y="40" font-size="10" letter-spacing="0.14em" fill="#5f6b7a">ROUTE</text>
+          <rect x="740" y="8" width="32" height="16" rx="8" fill="#0A2540"/>
+          <text x="756" y="20" font-size="10" font-weight="600" fill="#FFFFFF">04</text>
+          <text x="756" y="40" font-size="10" letter-spacing="0.14em" font-weight="600" fill="#0A2540">PICK</text>
+          <rect x="916" y="8" width="32" height="16" rx="8" fill="rgba(10,37,64,0.10)"/>
+          <text x="932" y="20" font-size="10" font-weight="600" fill="#0A2540">05</text>
+          <text x="932" y="40" font-size="10" letter-spacing="0.14em" fill="#5f6b7a">LEARN</text>
+        </g>
+
+        <!-- Lane labels -->
+        <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.14em">
+          <text x="70" y="102" font-size="11" font-weight="600" fill="#0A2540">YOU</text>
+          <text x="70" y="118" font-size="9" fill="#5f6b7a" letter-spacing="0.04em">decide</text>
+          <text x="70" y="214" font-size="11" font-weight="600" fill="#0A2540">CLAUDE</text>
+          <text x="70" y="230" font-size="9" fill="#5f6b7a" letter-spacing="0.04em">reads · describes</text>
+          <text x="70" y="326" font-size="11" font-weight="600" fill="#0A2540">SWITCHBOARD</text>
+          <text x="70" y="342" font-size="9" fill="#5f6b7a" letter-spacing="0.04em">local only</text>
+        </g>
+
+        <!-- Arrows (drawn before nodes) -->
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M228,284 V224 Q228,216 236,216 H326" stroke="#5f6b7a" stroke-width="1.2" marker-end="url(#arrow)"/>
+          <line x1="404" y1="260" x2="404" y2="282" stroke="#5f6b7a" stroke-width="1.2" marker-end="url(#arrow)"/>
+          <line x1="480" y1="328" x2="502" y2="328" stroke="#5f6b7a" stroke-width="1.2" marker-end="url(#arrow)"/>
+          <line x1="580" y1="148" x2="580" y2="170" stroke="#5f6b7a" stroke-width="1.2" marker-end="url(#arrow)"/>
+          <line x1="580" y1="260" x2="580" y2="282" stroke="#5f6b7a" stroke-width="1.2" marker-end="url(#arrow)"/>
+          <path d="M656,328 H696 Q704,328 704,320 V150" stroke="#0A2540" stroke-width="2" marker-end="url(#arrow-focal)"/>
+          <path d="M808,148 V320 Q808,328 816,328 H854" stroke="#5f6b7a" stroke-width="1.2" marker-end="url(#arrow)"/>
+          <line x1="932" y1="284" x2="932" y2="150" stroke="#1A3A5C" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#arrow-link)"/>
+        </g>
+
+        <!-- Focal arrow label -->
+        <rect x="714" y="206" width="56" height="20" rx="2" fill="#F9C642" stroke="#0A2540" stroke-width="0.8"/>
+        <text x="742" y="220" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="600" letter-spacing="0.08em" text-anchor="middle" fill="#0A2540">TOP 3</text>
+
+        <!-- Nodes -->
+        <g font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle">
+          <!-- YOU -->
+          <rect x="504" y="60" width="152" height="88" rx="6" fill="#FFFFFF" stroke="rgba(10,37,64,0.28)"/>
+          <rect x="512" y="68" width="28" height="14" rx="2" fill="rgba(10,37,64,0.10)"/>
+          <text x="526" y="78" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8" font-weight="600" fill="#0A2540">YOU</text>
+          <text x="580" y="100" font-size="14" font-weight="600" fill="#0A2540">Start a task</text>
+          <text x="580" y="118" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#5f6b7a">"review this PR"</text>
+          <text x="580" y="134" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#1A3A5C">any prompt</text>
+
+          <rect x="680" y="60" width="152" height="88" rx="6" fill="#F9C642" stroke="#0A2540" stroke-width="1.5"/>
+          <rect x="688" y="68" width="28" height="14" rx="2" fill="#0A2540"/>
+          <text x="702" y="78" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8" font-weight="600" fill="#FFFFFF">YOU</text>
+          <text x="756" y="100" font-size="14" font-weight="600" fill="#0A2540">Pick a skill</text>
+          <text x="756" y="118" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#0A2540">top 2–3 with reasons</text>
+          <text x="756" y="134" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#0A2540">your choice</text>
+
+          <rect x="856" y="60" width="152" height="88" rx="6" fill="#FFFFFF" stroke="rgba(10,37,64,0.28)"/>
+          <rect x="864" y="68" width="28" height="14" rx="2" fill="rgba(10,37,64,0.10)"/>
+          <text x="878" y="78" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8" font-weight="600" fill="#0A2540">YOU</text>
+          <text x="932" y="100" font-size="14" font-weight="600" fill="#0A2540">Report &amp; audit</text>
+          <text x="932" y="118" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#5f6b7a">local HTML page</text>
+          <text x="932" y="134" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#1A3A5C">/switchboard:report</text>
+
+          <!-- CLAUDE -->
+          <rect x="328" y="172" width="152" height="88" rx="6" fill="#FFFFFF" stroke="rgba(10,37,64,0.28)"/>
+          <rect x="336" y="180" width="28" height="14" rx="2" fill="rgba(10,37,64,0.10)"/>
+          <text x="350" y="190" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8" font-weight="600" fill="#0A2540">CLD</text>
+          <text x="404" y="212" font-size="14" font-weight="600" fill="#0A2540">Profile skills</text>
+          <text x="404" y="230" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#5f6b7a">fixed schema</text>
+          <text x="404" y="246" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#1A3A5C">/switchboard:profile</text>
+
+          <rect x="504" y="172" width="152" height="88" rx="6" fill="#FFFFFF" stroke="rgba(10,37,64,0.28)"/>
+          <rect x="512" y="180" width="28" height="14" rx="2" fill="rgba(10,37,64,0.10)"/>
+          <text x="526" y="190" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8" font-weight="600" fill="#0A2540">CLD</text>
+          <text x="580" y="212" font-size="14" font-weight="600" fill="#0A2540">Describe task</text>
+          <text x="580" y="230" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#5f6b7a">category · focus</text>
+          <text x="580" y="246" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#1A3A5C">PreToolUse hook</text>
+
+          <!-- SWITCHBOARD -->
+          <rect x="152" y="284" width="152" height="88" rx="6" fill="#FFFFFF" stroke="rgba(10,37,64,0.28)"/>
+          <rect x="160" y="292" width="28" height="14" rx="2" fill="rgba(10,37,64,0.10)"/>
+          <text x="174" y="302" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8" font-weight="600" fill="#0A2540">SWB</text>
+          <text x="228" y="324" font-size="14" font-weight="600" fill="#0A2540">Scan skills</text>
+          <text x="228" y="342" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#5f6b7a">every installed one</text>
+          <text x="228" y="358" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#1A3A5C">SessionStart hook</text>
+
+          <rect x="328" y="284" width="152" height="88" rx="6" fill="#FFFFFF" stroke="rgba(10,37,64,0.28)"/>
+          <rect x="336" y="292" width="28" height="14" rx="2" fill="rgba(10,37,64,0.10)"/>
+          <text x="350" y="302" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8" font-weight="600" fill="#0A2540">SWB</text>
+          <text x="404" y="324" font-size="14" font-weight="600" fill="#0A2540">Profile store</text>
+          <text x="404" y="342" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#5f6b7a">validated · hashed</text>
+          <text x="404" y="358" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#1A3A5C">profiles/*.json</text>
+
+          <rect x="504" y="284" width="152" height="88" rx="6" fill="#FFFFFF" stroke="rgba(10,37,64,0.28)"/>
+          <rect x="512" y="292" width="28" height="14" rx="2" fill="rgba(10,37,64,0.10)"/>
+          <text x="526" y="302" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8" font-weight="600" fill="#0A2540">SWB</text>
+          <text x="580" y="324" font-size="14" font-weight="600" fill="#0A2540">Rank skills</text>
+          <text x="580" y="342" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#5f6b7a">fit + past picks</text>
+          <text x="580" y="358" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#1A3A5C">route tool</text>
+
+          <rect x="856" y="284" width="152" height="88" rx="6" fill="#FFFFFF" stroke="rgba(10,37,64,0.28)"/>
+          <rect x="864" y="292" width="28" height="14" rx="2" fill="rgba(10,37,64,0.10)"/>
+          <text x="878" y="302" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8" font-weight="600" fill="#0A2540">SWB</text>
+          <text x="932" y="324" font-size="14" font-weight="600" fill="#0A2540">Choice log</text>
+          <text x="932" y="342" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#5f6b7a">features + ids only</text>
+          <text x="932" y="358" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#1A3A5C">choices.jsonl</text>
+        </g>
+
+        <!-- Legend strip -->
+        <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="#5f6b7a">
+          <text x="24" y="414" letter-spacing="0.14em" font-weight="600" fill="#0A2540">FLOW</text>
+          <line x1="100" y1="410" x2="128" y2="410" stroke="#5f6b7a" stroke-width="1.2" marker-end="url(#arrow)"/>
+          <text x="138" y="414">hand-off</text>
+          <line x1="224" y1="410" x2="252" y2="410" stroke="#0A2540" stroke-width="2" marker-end="url(#arrow-focal)"/>
+          <text x="262" y="414">shortlist shown to you</text>
+          <line x1="440" y1="410" x2="468" y2="410" stroke="#1A3A5C" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#arrow-link)"/>
+          <text x="478" y="414">read by you, on demand</text>
+          <rect x="676" y="403" width="20" height="12" rx="2" fill="#F9C642" stroke="#0A2540" stroke-width="0.8"/>
+          <text x="704" y="414">your decision</text>
+          <text x="24" y="440" letter-spacing="0.14em" font-weight="600" fill="#0A2540">STORE</text>
+          <text x="100" y="440">~/.switchboard on your machine · no network · no prompt text or code stored</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

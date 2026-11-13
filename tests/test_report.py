@@ -36,6 +36,14 @@ class ReportTest(unittest.TestCase):
         self.assertEqual(s["weeks"], [("2026-W45", 2), ("2026-W46", 1)])
         self.assertEqual(s["by_category"], [("code-review", 3, 2)])
 
+    def test_profiled_skills_table(self):
+        s = report.summarise(INV, PROFS, ROWS)
+        self.assertEqual(s["profiled_skills"], [("ecc:code-review", "code-review, security", "", 2, 3, True),
+                                                ("user:review", "code-review", "", 1, 3, False)])
+        page = report.render(s)
+        self.assertIn("Profiled skills (2)", page)
+        self.assertIn("ecc:code-review *", page)  # stale marker
+
     def test_weeks_fill_gaps_between_first_and_last(self):
         s = report.summarise(INV, PROFS, [row("2026-10-01", "user:review"), row("2026-10-20", "user:review")])
         self.assertEqual(s["weeks"], [("2026-W40", 1), ("2026-W41", 0), ("2026-W42", 0), ("2026-W43", 1)])
