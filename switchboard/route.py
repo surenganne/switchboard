@@ -14,9 +14,16 @@ def _list(v):
     return v if isinstance(v, list) else [v] if isinstance(v, str) else []
 
 
-def score(task: dict, p: dict) -> int:
-    s = W_TARGET * len(set(_list(task.get("targets"))) & set(p.get("targets") or []))
-    s += W_FOCUS * len(set(_list(task.get("focus"))) & set(p.get("focus") or []))
+def _share(task_vals, prof_vals) -> float:
+    """Matched fraction of the profile's own tags: listing every tag dilutes each one,
+    so a tag-stuffed profile cannot outrank precise ones."""
+    prof = set(prof_vals or [])
+    return len(set(_list(task_vals)) & prof) / len(prof) if prof else 0.0
+
+
+def score(task: dict, p: dict) -> float:
+    s = W_TARGET * _share(task.get("targets"), p.get("targets"))
+    s += W_FOCUS * _share(task.get("focus"), p.get("focus"))
     stack = set(_list(task.get("stack")))
     if stack and ("any" in (p.get("stack") or []) or stack & set(p.get("stack") or [])):
         s += W_STACK
@@ -24,7 +31,7 @@ def score(task: dict, p: dict) -> int:
         s += W_DEPTH
     if task.get("cost") and task.get("cost") == p.get("cost"):
         s += W_COST
-    return s
+    return round(s, 2)
 
 
 def route(task: dict, profiles: dict, inventory: dict, past: list[dict]) -> dict:

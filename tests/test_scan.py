@@ -72,6 +72,12 @@ class ScanTest(unittest.TestCase):
         (self.ch / "plugins/installed_plugins.json").write_text("{oops")
         self.assertEqual({s["id"] for s in scan_claude.list_skills(self.ch, None)}, {"user:alpha"})
 
+    def test_bad_plugin_manifest_skills_field_does_not_crash(self):
+        write(self.root / "plugins/plug/.claude-plugin/plugin.json", json.dumps({"skills": [1, None, "skills"]}))
+        self.assertIn("plug:beta", self.ids())
+        write(self.root / "plugins/plug/.claude-plugin/plugin.json", json.dumps({"skills": {"a": 1}}))
+        self.assertIn("plug:beta", self.ids())
+
     def test_hash_changes_when_file_changes(self):
         before = {s["id"]: s["content_hash"] for s in scan_claude.list_skills(self.ch, self.proj)}
         write(self.ch / "skills/alpha/SKILL.md", skill("alpha", "User skill alpha") + "more\n")

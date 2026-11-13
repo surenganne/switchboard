@@ -38,6 +38,11 @@ class ChoicesTest(unittest.TestCase):
         self.assertEqual(row["targets"], ["pr"])
         self.assertIsNone(row["depth"])
 
+    def test_record_keeps_only_known_skill_ids(self):
+        choices.record(TASK, ["a:x", "please fix the bug in payments.py"], "my secret prompt text", known={"a:x", "b:y"})
+        (row,) = self.lines()
+        self.assertEqual((row["offered"], row["chosen"]), (["a:x"], None))
+
     def test_record_respects_off_setting(self):
         (Path(self.tmp.name) / "settings.json").write_text(json.dumps({"record_choices": False}))
         choices.record(TASK, ["a:x"], "a:x")

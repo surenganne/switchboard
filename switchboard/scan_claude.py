@@ -25,7 +25,8 @@ def skill_dirs(root: Path) -> list[Path]:
     declared = _json(root / ".claude-plugin" / "plugin.json").get("skills")
     if isinstance(declared, str):
         declared = [declared]
-    dirs = [(root / d).resolve() for d in declared] if isinstance(declared, list) else [root / "skills"]
+    declared = [d for d in declared if isinstance(d, str)] if isinstance(declared, list) else None
+    dirs = [(root / d).resolve() for d in declared] if declared else [root / "skills"]
     return [d for d in dirs if d.is_dir()]
 
 
@@ -80,9 +81,12 @@ def list_skills(claude_home: Path, project_dir: Path | None) -> list[dict]:
         except (KeyError, IndexError, TypeError):
             continue
         plugin = key.split("@")[0]
-        for d in skill_dirs(root):
-            skills_in(d, plugin)
-        commands_in(root / "commands", plugin)
+        try:  # one odd third-party plugin must not take down the whole scan
+            for d in skill_dirs(root):
+                skills_in(d, plugin)
+            commands_in(root / "commands", plugin)
+        except (OSError, TypeError, ValueError):
+            continue
     return list(out.values())
 
 

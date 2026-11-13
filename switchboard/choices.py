@@ -42,12 +42,14 @@ def _recording_on() -> bool:
         return True
 
 
-def record(task: dict, offered: list[str], chosen: str) -> None:
+def record(task: dict, offered: list[str], chosen: str, known=None) -> None:
+    """`known`: ids of installed skills; when given, any other string is dropped (no free text stored)."""
     if not _recording_on():
         return
-    ids = lambda xs: [x for x in xs if isinstance(x, str) and len(x) <= 200][:10]
-    row = dict(features(task), date=date.today().isoformat(), offered=ids(offered or []),
-               chosen=chosen if isinstance(chosen, str) and len(chosen) <= 200 else None)
+    ok = lambda x: isinstance(x, str) and len(x) <= 200 and (known is None or x in known)
+    row = dict(features(task), date=date.today().isoformat(),
+               offered=[x for x in (offered if isinstance(offered, list) else []) if ok(x)][:10],
+               chosen=chosen if ok(chosen) else None)
     log = _log()
     if not log.exists():
         paths.write_private(log, "")

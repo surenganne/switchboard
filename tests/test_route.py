@@ -40,6 +40,18 @@ class RouteTest(unittest.TestCase):
         self.assertTrue(r["overlap"])
         self.assertEqual(route.route({"category": "docs"}, FIX["profiles"], FIX["inventory"], [])["candidates"], [])
 
+    def test_tag_stuffed_profile_does_not_outrank_precise_skill(self):
+        profs = copy.deepcopy(FIX["profiles"])
+        inv = copy.deepcopy(FIX["inventory"])
+        stuffed = dict(profs["builtin:code-review"], id="aaa:all", targets=["pr", "local-diff", "files", "repo", "url", "design"],
+                       focus=["security", "correctness", "bloat", "performance", "merge-readiness", "tests"])
+        profs["aaa:all"], inv["aaa:all"] = stuffed, dict(inv["builtin:code-review"], id="aaa:all")
+        for task, want in (({"targets": ["local-diff"], "focus": ["security"]}, "ecc:code-review"),
+                           ({"targets": ["pr"], "focus": ["merge-readiness"], "depth": "thorough"}, "user:review"),
+                           ({"targets": ["files"], "focus": ["bloat"], "depth": "quick"}, "ponytail:ponytail-review")):
+            got = [c["id"] for c in route.route(dict(task, category="code-review"), profs, inv, [])["candidates"]]
+            self.assertEqual(got[0], want, (task, got))
+
     def test_uninstalled_skill_excluded(self):
         inv = copy.deepcopy(FIX["inventory"])
         del inv["user:review"]

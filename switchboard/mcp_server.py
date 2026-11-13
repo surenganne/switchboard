@@ -49,7 +49,7 @@ def call_tool(name: str, args: dict):
         task = args.get("task") or {}
         return route.route(task, profiles.load_all(), inventory(), choices.similar(task))
     if name == "record_choice":
-        choices.record(args.get("task") or {}, args.get("offered") or [], args.get("chosen"))
+        choices.record(args.get("task") or {}, args.get("offered") or [], args.get("chosen"), known=set(inventory()))
         return {"recorded": True}
     if name == "pending_profiles":
         inv = inventory()
