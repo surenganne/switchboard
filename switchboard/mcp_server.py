@@ -7,9 +7,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from switchboard import choices, profiles, report, route, scan_claude  # noqa: E402
+from datetime import date  # noqa: E402
 
-VERSION = "0.3.0"
+from switchboard import choices, hygiene, profiles, report, route, scan_claude, usage  # noqa: E402
+
+VERSION = "0.4.0"
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")  # newest first; the subset this server speaks
 OBJ = {"type": "object"}
 STRS = {"type": "array", "items": {"type": "string"}}
@@ -49,10 +51,25 @@ TOOLS = [
      "inputSchema": schema({"confirm": {"type": "boolean"}}, ["confirm"])},
     {"name": "report", "description": "Write a local HTML activity report to ~/.switchboard/report.html and return its path.",
      "inputSchema": schema()},
+    {"name": "hygiene", "description": "Suggest unused plugins and user/project skills to disable, with estimated context-token savings. Read-only.",
+     "inputSchema": schema({"days": {"type": "integer", "minimum": hygiene.MIN_DAYS, "maximum": hygiene.MAX_DAYS}})},
 ]
 
 
 inventory = scan_claude.current
+
+
+def hygiene_report(days=hygiene.DEFAULT_DAYS):
+    return hygiene.suggest(inventory(), usage.rows(), usage.first_seen(), date.today().isoformat(), days,
+                           usage.recording_on())
+
+
+def hygiene_status(h: dict):
+    if h.get("recording") is False:
+        return "off"
+    if h["collecting"]:
+        return f"collecting {h['days_logged']}/{h['window_days']}"
+    return len(h["plugins"]) + len(h["skills"])
 
 
 def call_tool(name: str, args: dict):
@@ -91,13 +108,16 @@ def call_tool(name: str, args: dict):
         inv, profs = inventory(), profiles.load_all()
         return {"skills": len(inv), "profiled": sum(1 for s in profs if s in inv),
                 "missing_role": len(profiles.pending_roles(inv)),
-                "pending": len(profiles.pending(inv)), "overlap_categories": route.overlap_categories(profs, inv)}
+                "pending": len(profiles.pending(inv)), "overlap_categories": route.overlap_categories(profs, inv),
+                "hygiene": hygiene_status(hygiene_report())}
+    if name == "hygiene":
+        return hygiene_report(args.get("days", hygiene.DEFAULT_DAYS))
     if name == "audit":
         return {"groups": choices.audit()}
     if name == "forget":
         if args.get("confirm") is not True:  # deleting the log needs an explicit yes from the user
             return {"removed": 0, "error": "confirm: ask the user first, then call again with confirm: true"}
-        return {"removed": choices.forget()}
+        return {"removed": choices.forget(), "usage_removed": usage.forget()}
     if name == "report":
         inv, profs = inventory(), profiles.load_all()
         path = report.write(inv, profs)

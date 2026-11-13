@@ -22,7 +22,7 @@ front of you, it shows you the best two or three, each with a one-line reason, a
 
 - [Install](#install) · [First run](#first-run) · [How it works](#how-it-works) · [Commands](#commands)
 - [What you'll see](#what-youll-see) · [Activity report](#activity-report) · [Privacy](#privacy)
-- [Limits](#limits-in-v03) · [Uninstall](#uninstall) · [Development](#development)
+- [Limits](#limits-in-v04) · [Uninstall](#uninstall) · [Development](#development)
 
 ## Install
 
@@ -71,7 +71,8 @@ changed skills are re-profiled. A version bump that leaves a skill's text alone 
 | `/switchboard:status` | Counts and overlapping task areas |
 | `/switchboard:audit` | Task types where you keep passing over the top pick |
 | `/switchboard:report` | Build a local HTML report of your activity (see below) |
-| `/switchboard:forget` | Delete your choice history (asks first) |
+| `/switchboard:hygiene` | Suggest unused plugins and skills to turn off, with the context tokens each would save |
+| `/switchboard:forget` | Delete your choice and usage history (asks first) |
 
 ## What you'll see
 
@@ -168,14 +169,38 @@ Wrote ~/.switchboard/report.html (89 picks across 86 installed skills).
 Open it with: open ~/.switchboard/report.html
 ```
 
+### `/switchboard:hygiene`
+
+From v0.4 Switchboard logs which skills you use (skill id and date only). Until the log covers the window
+(30 days by default), you see:
+
+```
+12 of 30 days logged; suggestions start after 30.
+```
+
+After that, plugins with no skill used in the window, and your own user or project skills you never used:
+
+```
+| Turn off            | Skills | ≈ Tokens |
+|---------------------|--------|----------|
+| ecc@ecc (plugin)    | 412    | 21,300   |
+| user:old-helper     | 1      | 48       |
+
+Mostly unused (info): gstack@gstack, used 2 of 60 (review, ship); turning it off would save ≈ 3,900.
+Skill list today ≈ 28,700 tokens; after these suggestions ≈ 7,350 (estimate; skills and commands only).
+```
+
+Skills first seen inside the window are never suggested. Switchboard does not turn anything off: use
+`/plugin`, or ask Claude. Plugin skills can only be turned off with their whole plugin.
+
 ### `/switchboard:forget`
 
 ```
-Delete your local choice history (choices.jsonl)? Profiles are kept.
-  ● Delete my choice history
+Delete your local history (choices.jsonl, usage.jsonl)? Profiles are kept.
+  ● Delete my history
   ○ Keep it
 
-Removed 89 entries.
+Removed 89 choice entries and 1,204 usage entries.
 ```
 
 ## Activity report
@@ -214,11 +239,14 @@ Everything lives in `~/.switchboard/`. Directories are mode 0700 and files 0600.
 | `state/` | Per session: reminder-hook timestamps and the skill names you typed as `/name` (names only, never the message); deleted after a day |
 | `report.html` | The latest activity report, written only when you run `/switchboard:report` |
 | `last_offer.json` | A hash of the unprofiled-skill list, so you are offered profiling only when it changes |
+| `usage.jsonl` | Per skill use: date and installed skill id only (anything that is not an installed skill id is dropped) |
+| `first_seen.json` | The date each skill was first seen installed, so new skills are not called unused |
 
 No prompt text and no code are stored. Feature fields keep only values from the fixed lists. To stop
-recording choices, create `~/.switchboard/settings.json` with `{"record_choices": false}`.
+recording, create `~/.switchboard/settings.json` with `{"record_choices": false}` and/or
+`{"record_usage": false}`. Past session transcripts are never read.
 
-## Limits in v0.3
+## Limits in v0.4
 
 - Claude Code only. The scanner sits behind a small interface (`list_skills`) so other platforms can follow.
 - Built-in Claude Code skills (such as `code-review` and `simplify`) have no files on disk, so they are not
@@ -226,6 +254,8 @@ recording choices, create `~/.switchboard/settings.json` with `{"record_choices"
 - Skills and plugin commands only; MCP tools and subagents are not routed.
 - Fingerprints cover a skill's `.md` files only, so an update that changes only its scripts does not mark it
   for re-profiling.
+- Hygiene suggests whole plugins, not single plugin skills. Its token figures are estimates (about 4
+  characters per token) and leave out agents, MCP tools and hooks.
 
 ## Uninstall
 

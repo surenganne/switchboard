@@ -50,7 +50,13 @@ class McpTest(unittest.TestCase):
         self.assertIn("result", self.rpc("ping"))
         tools = {t["name"] for t in self.rpc("tools/list")["result"]["tools"]}
         self.assertEqual(tools, {"route", "record_choice", "pending_profiles", "save_profile", "pending_roles", "set_role",
-                                 "status", "audit", "forget", "report"})
+                                 "status", "audit", "forget", "report", "hygiene"})
+
+    def test_hygiene_collecting(self):
+        err, out = self.call("hygiene")
+        self.assertFalse(err)
+        self.assertEqual(out, {"collecting": True, "days_logged": 0, "window_days": 30})
+        self.assertEqual(self.call("status")[1]["hygiene"], "collecting 0/30")
 
     def test_role_backfill_roundtrip(self):
         err, pend = self.call("pending_profiles", limit=20)
@@ -93,7 +99,7 @@ class McpTest(unittest.TestCase):
         self.assertEqual((rep["picks"], rep["skills"]), (1, 4))
         err, refused = self.call("forget")  # deleting needs an explicit confirm
         self.assertEqual((refused["removed"], refused["error"][:8]), (0, "confirm:"))
-        self.assertEqual(self.call("forget", confirm=True)[1], {"removed": 1})
+        self.assertEqual(self.call("forget", confirm=True)[1], {"removed": 1, "usage_removed": 0})
 
     def test_record_choice_resolves_bare_name_and_rejects_unknown(self):
         log = Path(self.tmp.name) / "sbhome" / "choices.jsonl"
