@@ -1,6 +1,6 @@
 # Switchboard — design
 
-Date: 2026-11-13 · Status: draft for approval
+Date: 2026-11-13 · Status: approved; v0.1 implemented
 
 ## Intent
 

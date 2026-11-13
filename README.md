@@ -15,9 +15,11 @@ front of you, it shows you the best two or three, each with a one-line reason, a
 ## Install
 
 ```sh
-claude plugin marketplace add <this repo's URL or local path>
+claude plugin marketplace add surenganne/switchboard
 claude plugin install switchboard@switchboard
 ```
+
+To try a local checkout instead, pass its path: `claude plugin marketplace add ./switchboard`.
 
 Restart Claude Code. Requires `python3` (3.9 or newer) on your `PATH`.
 
@@ -86,6 +88,7 @@ rm -rf ~/.switchboard
 ## Development
 
 ```sh
+git clone https://github.com/surenganne/switchboard.git && cd switchboard
 python3 -m unittest discover -s tests -t .
 ```
 
