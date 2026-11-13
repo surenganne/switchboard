@@ -130,6 +130,56 @@ class HooksTest(unittest.TestCase):
         state = json.loads(next((self.sb / "state").glob("*.json")).read_text())
         self.assertNotIn("please", json.dumps(state))  # names only, never prompt text
 
+    def usage_ids(self):
+        log = self.sb / "usage.jsonl"
+        return [json.loads(l)["id"] for l in log.read_text().splitlines()] if log.exists() else []
+
+    def fixture_session(self):
+        ch, proj = build_fixture(self.root)
+        self.env.update(SWITCHBOARD_CLAUDE_HOME=str(ch), CLAUDE_PROJECT_DIR=str(proj))
+        self.session()
+        return json.loads((self.sb / "inventory.json").read_text())["skills"]
+
+    def test_session_notes_first_seen(self):
+        inv = self.fixture_session()
+        self.assertEqual(set(json.loads((self.sb / "first_seen.json").read_text())), set(inv))
+
+    def test_pretool_logs_skill_call(self):
+        self.fixture_session()
+        self.pretool("Skill", {"skill": "alpha"})
+        self.assertEqual(self.usage_ids(), ["user:alpha"])
+        self.prompt("use /alpha please")  # named by the user: allowed through, still logged
+        self.pretool("Skill", {"skill": "alpha"})
+        self.assertEqual(self.usage_ids(), ["user:alpha", "user:alpha", "user:alpha"])
+
+    def test_pretool_drops_unknown(self):
+        self.fixture_session()
+        self.pretool("Skill", {"skill": "not-installed"})
+        self.assertEqual(self.usage_ids(), [])
+
+    def test_session_with_recording_off_restarts_window(self):
+        self.fixture_session()
+        self.assertTrue((self.sb / "first_seen.json").exists())
+        (self.sb / "settings.json").write_text(json.dumps({"record_usage": False}))
+        self.session()
+        self.assertFalse((self.sb / "first_seen.json").exists())
+
+    def test_usage_falls_back_to_live_scan(self):
+        self.fixture_session()
+        # another project's session start overwrote the shared inventory
+        (self.sb / "inventory.json").write_text(json.dumps({"version": 1, "skills": {}}))
+        self.pretool("Skill", {"skill": "delta"})
+        self.prompt("try /alpha")
+        ids = self.usage_ids()
+        self.assertEqual(len(ids), 2)
+        self.assertTrue(ids[0].startswith("project:") and ids[0].endswith(":delta"))
+        self.assertEqual(ids[1], "user:alpha")
+
+    def test_prompt_logs_named(self):
+        self.fixture_session()
+        self.prompt("run /alpha on src/x and /Users/me/file")
+        self.assertEqual(self.usage_ids(), ["user:alpha"])
+
     def test_prompt_hook_survives_bad_input(self):
         self.assertEqual(self.prompt(""), "")
         self.assertEqual(self.run_hook("hook_prompt.py", "not json"), "")

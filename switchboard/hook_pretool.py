@@ -13,7 +13,7 @@ REASON = ("Switchboard: several installed skills fit this kind of task. Call the
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from switchboard import paths, profiles, route, scan_claude
+    from switchboard import paths, profiles, route, scan_claude, usage
 
     def cleanup(now):
         for f in (paths.home() / "state").glob("*.json"):
@@ -42,6 +42,8 @@ try:
         if tool != "Skill":
             return
         skill = str((event.get("tool_input") or {}).get("skill") or "")
+        if usage.recording_on():
+            usage.record(usage.resolve_ids([skill]))
         if not skill or now - float(state.get("routed_at", 0)) <= WINDOW:
             return
         if skill in (state.get("named") or []):  # the user asked for this skill by name: never second-guess them

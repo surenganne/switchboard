@@ -37,7 +37,7 @@ class PackageTest(unittest.TestCase):
 
     def test_commands_have_descriptions(self):
         names = {p.stem for p in (ROOT / "commands").glob("*.md")}
-        self.assertEqual(names, {"profile", "status", "audit", "forget", "report"})
+        self.assertEqual(names, {"profile", "status", "audit", "forget", "report", "hygiene"})
         for p in (ROOT / "commands").glob("*.md"):
             self.assertTrue((frontmatter.read(p) or {}).get("description"), p)
 

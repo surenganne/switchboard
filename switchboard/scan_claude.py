@@ -108,7 +108,7 @@ def list_skills(claude_home: Path, project_dir: Path | None) -> list[dict]:
         if not desc:
             return
         out[sid] = {"id": sid, "name": name, "source": source, "kind": kind, "path": str(path),
-                    "description": desc[:240], "content_hash": _hash(path, kind, data)}
+                    "description": desc[:240], "desc_chars": len(desc), "content_hash": _hash(path, kind, data)}
 
     def skills_in(d, source):
         for sk in sorted(d.glob("*/SKILL.md")):
@@ -148,6 +148,9 @@ def list_skills(claude_home: Path, project_dir: Path | None) -> list[dict]:
                     add(plugin, c.stem, "command", c)
         except (OSError, TypeError, ValueError):
             continue
+        for rec in out.values():  # the settings key hygiene tells the user to disable
+            if rec["source"] == plugin:
+                rec.setdefault("plugin_key", key)
     return list(out.values())
 
 
