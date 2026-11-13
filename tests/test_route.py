@@ -63,6 +63,22 @@ class RouteTest(unittest.TestCase):
         got = [c["id"] for c in route.route(task, profs, inv, [])["candidates"]]
         self.assertEqual(got, ["zzz:broad", "aaa:narrow"])
 
+    def test_roles_match_profile_schema(self):
+        from switchboard import profiles
+        self.assertEqual(route.ROLES, profiles.ROLES)
+
+    def test_matching_role_ranks_first_then_unknown_then_other(self):
+        base = dict(FIX["profiles"]["builtin:code-review"], depth="standard", cost="single-pass", stack=["any"],
+                    targets=["pr"], focus=["merge-readiness"])
+        profs = {"a:helper": dict(base, id="a:helper", role="assists"),  # best tag match, wrong role
+                 "b:legacy": dict(base, id="b:legacy", focus=["style"]),  # no role yet
+                 "c:reviewer": dict(base, id="c:reviewer", focus=["style"], role="performs")}
+        inv = {sid: dict(FIX["inventory"]["builtin:code-review"], id=sid) for sid in profs}
+        task = {"category": "code-review", "targets": ["pr"], "focus": ["merge-readiness"]}
+        ranked = lambda t: [c["id"] for c in route.route(t, profs, inv, [])["candidates"]]
+        self.assertEqual(ranked(task), ["c:reviewer", "b:legacy", "a:helper"])  # tasks default to performs
+        self.assertEqual(ranked(dict(task, role="assists")), ["a:helper", "b:legacy", "c:reviewer"])
+
     def test_uninstalled_skill_excluded(self):
         inv = copy.deepcopy(FIX["inventory"])
         del inv["user:review"]

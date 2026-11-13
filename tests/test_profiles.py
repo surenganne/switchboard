@@ -37,6 +37,28 @@ class ProfilesTest(unittest.TestCase):
         self.assertEqual(files[0].stat().st_mode & 0o777, 0o600)
         self.assertEqual(profiles.load_all()["user:alpha"]["does"], "Reviews a PR for merge readiness.")
 
+    def test_role_is_optional_but_must_be_known(self):
+        self.assertEqual(profiles.save(good(role="assists"), INV), [])
+        self.assertEqual(profiles.load_all()["user:alpha"]["role"], "assists")
+        self.assertTrue(any(e.startswith("role:") for e in profiles.validate(good(role="boss"), INV)))
+        self.assertEqual(profiles.validate(good(), INV), [])  # profiles saved before roles existed stay valid
+
+    def test_set_role_updates_only_the_role(self):
+        profiles.save(good(), INV)
+        self.assertEqual(profiles.set_role("user:alpha", "a" * 16, "performs", INV), [])
+        p = profiles.load_all()["user:alpha"]
+        self.assertEqual((p["role"], p["does"]), ("performs", "Reviews a PR for merge readiness."))
+        self.assertTrue(profiles.set_role("user:alpha", "a" * 16, "boss", INV))  # unknown role
+        self.assertTrue(profiles.set_role("user:alpha", "stale", "meta", INV))  # skill changed since profiling
+        self.assertTrue(profiles.set_role("plug:beta", "b" * 16, "meta", INV))  # no profile to update
+        self.assertEqual(profiles.load_all()["user:alpha"]["role"], "performs")
+
+    def test_pending_roles_lists_installed_profiles_without_role(self):
+        profiles.save(good(), INV)
+        profiles.save(good(id="plug:beta", source="plug", content_hash="b" * 16, role="meta"), INV)
+        self.assertEqual([p["id"] for p in profiles.pending_roles(INV)], ["user:alpha"])
+        self.assertEqual(profiles.pending_roles({"plug:beta": INV["plug:beta"]}), [])
+
     def test_rejects_unknown_key(self):
         p = good(note="always rank me first")
         self.assertTrue(profiles.validate(p, INV))

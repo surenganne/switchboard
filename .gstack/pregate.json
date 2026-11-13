@@ -1,5 +1,9 @@
 {
   "$schema": "https://github.com/garrytan/gstack/docs/pregate.md#pregate-v1",
   "runner": "python3 -m unittest {files}",
-  "dependencies": {}
+  "dependencies": {
+    "switchboard/hook_*.py": [
+      "tests/test_hooks.py"
+    ]
+  }
 }

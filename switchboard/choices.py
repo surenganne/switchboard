@@ -11,7 +11,7 @@ from datetime import date
 
 from switchboard import paths, profiles
 
-FEATURES = ("category", "targets", "focus", "stack", "depth", "cost")
+FEATURES = ("category", "targets", "focus", "stack", "depth", "cost", "role")
 
 
 def _log():
@@ -32,6 +32,7 @@ def features(task: dict) -> dict:
         "stack": keep("stack", lambda x: isinstance(x, str) and len(x) <= 30 and bool(profiles.STACK_RE.match(x))),
         "depth": one("depth", profiles.DEPTHS),
         "cost": one("cost", profiles.COSTS),
+        "role": one("role", profiles.ROLES),
     }
 
 

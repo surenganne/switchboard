@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from collections import Counter
 
+ROLES = ("performs", "assists", "meta")  # kept equal to profiles.ROLES (tests/test_route checks it)
+
 W_TARGET, W_FOCUS, W_STACK, W_DEPTH, W_COST = 3, 2, 1, 1, 1
 LIMIT = 5
 FULL_TAGS = 3  # a field with more tags than this is discounted
@@ -48,11 +50,14 @@ def route(task: dict, profiles: dict, inventory: dict, past: list[dict]) -> dict
     cat = task.get("category") if isinstance(task, dict) else None
     if not isinstance(cat, str) or not cat:
         raise ValueError("task.category is required")
-    scored = [(score(task, p), _precision(task, p), sid) for sid, p in profiles.items()
+    want = task.get("role") if task.get("role") in ROLES else "performs"
+    # matching role first, then profiles not yet given a role, then the rest; score orders within each group
+    group = lambda p: 0 if p.get("role") == want else 1 if "role" not in p else 2
+    scored = [(group(p), score(task, p), _precision(task, p), sid) for sid, p in profiles.items()
               if sid in inventory and cat in (p.get("categories") or [])]
-    scored.sort(key=lambda x: (-x[0], -x[1], x[2]))
+    scored.sort(key=lambda x: (x[0], -x[1], -x[2], x[3]))
     cands = []
-    for s, _, sid in scored[:LIMIT]:
+    for _, s, _, sid in scored[:LIMIT]:
         p = profiles[sid]
         cands.append({"id": sid, "score": s, "stale": p.get("content_hash") != inventory[sid].get("content_hash"),
                       "profile": p,

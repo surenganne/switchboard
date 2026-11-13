@@ -22,7 +22,7 @@ front of you, it shows you the best two or three, each with a one-line reason, a
 
 - [Install](#install) · [First run](#first-run) · [How it works](#how-it-works) · [Commands](#commands)
 - [What you'll see](#what-youll-see) · [Activity report](#activity-report) · [Privacy](#privacy)
-- [Limits](#limits-in-v02) · [Uninstall](#uninstall) · [Development](#development)
+- [Limits](#limits-in-v03) · [Uninstall](#uninstall) · [Development](#development)
 
 ## Install
 
@@ -41,7 +41,7 @@ Restart Claude Code. Requires `python3` (3.9 or newer) on your `PATH`.
 /switchboard:profile
 ```
 
-Claude reads each skill and writes a short, fixed-format profile (category, what it works on, focus, depth,
+Claude reads each skill and writes a short, fixed-format profile (category, role, what it works on, focus, depth,
 cost, stack). It shows you the count and a rough token cost before starting, and runs in parallel
 subagents. Later sessions profile only new or changed skills; the session start message tells you when
 some are waiting.
@@ -52,7 +52,7 @@ some are waiting.
 |---|---|---|
 | **1 · Scan** | Switchboard | At session start, a hook lists your user, project and enabled-plugin skills and commands, and fingerprints each one (its main file plus every `.md` in its folder). |
 | **2 · Profile** | Claude | `/switchboard:profile` has Claude fill a fixed schema per skill. A validator accepts only known fields, values from fixed lists and short text, so a skill's own text cannot steer the router. |
-| **3 · Route** | Claude + Switchboard | Before Claude uses a skill in a task area where several profiled skills overlap, it describes the task (category, targets, focus, stack) to the local `route` tool, which scores the candidates. If Claude skips this step, a hook reminds it once. |
+| **3 · Route** | Claude + Switchboard | Before Claude uses a skill in a task area where several profiled skills overlap, it describes the task (category, role, targets, focus, stack) to the local `route` tool. Skills whose role matches the task (`performs` by default; `assists` for help around a task, such as answering review comments) rank first, then by how much of the task each covers. If Claude skips this step, a hook reminds it once. |
 | **4 · Pick** | You | Claude shows the top two or three with a one-line reason each, and you choose. |
 | **5 · Learn** | Switchboard | Your pick is logged locally, shown as a label on similar tasks later, and feeds `/switchboard:audit` and the activity report. |
 
@@ -67,7 +67,7 @@ changed skills are re-profiled. A version bump that leaves a skill's text alone 
 
 | Command | What it does |
 |---|---|
-| `/switchboard:profile` | Profile new or changed skills |
+| `/switchboard:profile` | Profile new or changed skills, and backfill roles for profiles saved before v0.3 |
 | `/switchboard:status` | Counts and overlapping task areas |
 | `/switchboard:audit` | Task types where you keep passing over the top pick |
 | `/switchboard:report` | Build a local HTML report of your activity (see below) |
@@ -210,7 +210,7 @@ Everything lives in `~/.switchboard/`. Directories are mode 0700 and files 0600.
 |---|---|
 | `inventory.json` | Installed skill ids, names, paths, descriptions, hashes |
 | `profiles/*.json` | One profile per skill |
-| `choices.jsonl` | Per pick: date, task features (category, targets, focus, stack, depth, cost), skills offered, skill chosen |
+| `choices.jsonl` | Per pick: date, task features (category, targets, focus, stack, depth, cost, role), skills offered, skill chosen |
 | `state/` | Per session: reminder-hook timestamps and the skill names you typed as `/name` (names only, never the message); deleted after a day |
 | `report.html` | The latest activity report, written only when you run `/switchboard:report` |
 | `last_offer.json` | A hash of the unprofiled-skill list, so you are offered profiling only when it changes |
@@ -218,7 +218,7 @@ Everything lives in `~/.switchboard/`. Directories are mode 0700 and files 0600.
 No prompt text and no code are stored. Feature fields keep only values from the fixed lists. To stop
 recording choices, create `~/.switchboard/settings.json` with `{"record_choices": false}`.
 
-## Limits in v0.2
+## Limits in v0.3
 
 - Claude Code only. The scanner sits behind a small interface (`list_skills`) so other platforms can follow.
 - Built-in Claude Code skills (such as `code-review` and `simplify`) have no files on disk, so they are not
