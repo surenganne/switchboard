@@ -21,16 +21,25 @@ def _json(path: Path) -> dict:
         return {}
 
 
-def skill_dirs(root: Path) -> list[Path]:
-    """Skill folders for a plugin root: the plugin.json `skills` field if set, else ./skills."""
-    declared = _json(root / ".claude-plugin" / "plugin.json").get("skills")
+def plugin_paths(root: Path, field: str) -> list[Path]:
+    """The default ./<field> folder plus any paths plugin.json declares for it (custom paths add to the
+    default, they do not replace it), kept only when they stay inside the plugin."""
+    declared = _json(root / ".claude-plugin" / "plugin.json").get(field)
     if isinstance(declared, str):
         declared = [declared]
-    declared = [d for d in declared if isinstance(d, str)] if isinstance(declared, list) else None
+    declared = [d for d in declared if isinstance(d, str)] if isinstance(declared, list) else []
     base = root.resolve()
-    dirs = [(root / d).resolve() for d in declared] if declared else [root / "skills"]
-    # a manifest must not point the scanner outside its own plugin
-    return [d for d in dirs if d.is_dir() and (d.resolve() == base or base in d.resolve().parents)]
+    out = []
+    for p in [root / field] + [root / d for d in declared]:
+        p = p.resolve()
+        # a manifest must not point the scanner outside its own plugin
+        if p.exists() and (p == base or base in p.parents) and p not in out:
+            out.append(p)
+    return out
+
+
+def skill_dirs(root: Path) -> list[Path]:
+    return [d for d in plugin_paths(root, "skills") if d.is_dir()]
 
 
 def install_root(entries, project_dir: Path | None) -> Path | None:
@@ -73,7 +82,8 @@ def _hash(path: Path, kind: str, data: bytes) -> str:
         for p in extra:
             try:
                 if p.stat().st_size <= MAX_FILE_BYTES:
-                    h.update(b"\0" + str(p.relative_to(path.parent)).encode() + b"\0" + p.read_bytes())
+                    # fsencode: a non-UTF-8 filename must not crash the whole scan
+                    h.update(b"\0" + os.fsencode(p.relative_to(path.parent)) + b"\0" + p.read_bytes())
             except OSError:
                 continue
     return h.hexdigest()[:16]
@@ -131,7 +141,11 @@ def list_skills(claude_home: Path, project_dir: Path | None) -> list[dict]:
         try:  # one odd third-party plugin must not take down the whole scan
             for d in skill_dirs(root):
                 skills_in(d, plugin)
-            commands_in(root / "commands", plugin)
+            for c in plugin_paths(root, "commands"):
+                if c.is_dir():
+                    commands_in(c, plugin)
+                elif c.suffix == ".md":
+                    add(plugin, c.stem, "command", c)
         except (OSError, TypeError, ValueError):
             continue
     return list(out.values())

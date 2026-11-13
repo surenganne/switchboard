@@ -63,6 +63,13 @@ class ChoicesTest(unittest.TestCase):
         (g,) = choices.audit()
         self.assertEqual((g["category"], g["targets"], g["focus"], g["overrides"]), ("code-review", ["pr"], ["security"], 2))
 
+    def test_audit_survives_dropped_choice(self):
+        choices.record(TASK, ["a:x", "b:y"], "b:y", known={"a:x", "b:y"})
+        choices.record(TASK, ["a:x", "b:y"], "gone:skill", known={"a:x", "b:y"})  # stored as chosen null
+        choices.record(TASK, ["a:x", "b:y"], "b:y", known={"a:x", "b:y"})
+        (g,) = choices.audit()
+        self.assertEqual((g["overrides"], g["chosen"]), (2, ["b:y"]))
+
     def test_forget_clears(self):
         choices.record(TASK, ["a:x"], "a:x")
         choices.record(TASK, ["a:x"], "a:x")

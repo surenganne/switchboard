@@ -95,7 +95,7 @@ def audit() -> list[dict]:
     groups = defaultdict(list)
     for row in _rows():
         offered = row.get("offered") or []
-        if offered and row.get("chosen") != offered[0]:
+        if offered and isinstance(row.get("chosen"), str) and row["chosen"] != offered[0]:
             key = (row.get("category"), tuple(sorted(row.get("targets") or [])), tuple(sorted(row.get("focus") or [])))
             groups[key].append(row.get("chosen"))
     return [{"category": c, "targets": list(t), "focus": list(f), "overrides": len(picked), "chosen": sorted(set(picked))}

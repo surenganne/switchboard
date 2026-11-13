@@ -1,6 +1,7 @@
 """SessionStart hook: refresh the inventory and tell Claude when to call `route`. Fails open."""
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -22,15 +23,19 @@ try:
         return " ".join(parts)
 
     def pending_is_news(pending) -> bool:
-        """Offer profiling only when the set of unprofiled skills changed since the last offer."""
+        """Offer profiling only when this project's set of unprofiled skills changed since the last offer."""
         digest = hashlib.sha256(json.dumps(sorted((p["id"], p["reason"]) for p in pending)).encode()).hexdigest()
+        key = scan_claude.project_source(Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()))
         f = paths.home() / "last_offer.json"
         try:
-            if json.loads(f.read_text()).get("pending") == digest:
-                return False
-        except (OSError, ValueError, AttributeError):
-            pass
-        paths.write_private(f, json.dumps({"pending": digest}))
+            seen = json.loads(f.read_text())
+            seen = seen if isinstance(seen, dict) else {}
+        except (OSError, ValueError):
+            seen = {}
+        if seen.get(key) == digest:
+            return False
+        seen[key] = digest
+        paths.write_private(f, json.dumps(seen))
         return True
 
     def main():

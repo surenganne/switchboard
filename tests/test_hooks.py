@@ -92,6 +92,18 @@ class HooksTest(unittest.TestCase):
         write(ch / "skills/epsilon/SKILL.md", skill("epsilon", "New skill"))
         self.assertIn("5 skills are not profiled yet", self.session())
 
+    def test_profiling_offer_is_remembered_per_project(self):
+        ch, proj = build_fixture(self.root)
+        other = self.root / "proj2"
+        write(other / ".claude/skills/omega/SKILL.md", skill("omega", "Other project skill"))
+        self.env["SWITCHBOARD_CLAUDE_HOME"] = str(ch)
+        for p in (proj, other):
+            self.env["CLAUDE_PROJECT_DIR"] = str(p)
+            self.assertIn("not profiled yet", self.session())
+        for p in (proj, other):  # switching back and forth: nothing new, so no repeat offer
+            self.env["CLAUDE_PROJECT_DIR"] = str(p)
+            self.assertEqual(self.session(), "")
+
     def test_pretool_denies_unrouted_overlap_skill_once(self):
         self.seed_review_profiles()
         out = self.pretool("Skill", {"skill": "ecc:code-review"})

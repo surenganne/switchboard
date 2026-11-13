@@ -110,6 +110,15 @@ class ScanTest(unittest.TestCase):
         self.assertNotIn("plug:sneaky", ids)
         self.assertIn("plug:beta", ids)
 
+    def test_declared_paths_add_to_default_dirs(self):
+        plug = self.root / "plugins/plug"
+        write(plug / "extra/epsilon/SKILL.md", skill("epsilon", "Extra skill"))
+        write(plug / "more-cmds/zeta.md", "---\ndescription: Extra command\n---\n")
+        write(plug / "single.md", "---\ndescription: Single file command\n---\n")
+        write(plug / ".claude-plugin/plugin.json", json.dumps({"skills": "./extra", "commands": ["./more-cmds", "./single.md"]}))
+        ids = self.ids()
+        self.assertTrue({"plug:beta", "plug:epsilon", "plug:gamma-cmd", "plug:zeta", "plug:single"} <= ids, ids)
+
     def test_missing_description_falls_back_to_first_body_line(self):
         write(self.root / "plugins/plug/commands/bare.md", "\n# Bare command\nDoes bare things.\n")
         write(self.ch / "skills/nodesc/SKILL.md", "---\nname: nodesc\n---\n\nFirst line here.\nMore.\n")
