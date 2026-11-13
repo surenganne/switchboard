@@ -1,9 +1,8 @@
 """PreToolUse hook on Skill: when several profiled skills fit that kind of task and `route` was not called
 in the last 10 minutes, block once (per session, per 10 minutes) and ask Claude to call `route` first.
+Skills the user named with /<skill> in this session are never blocked (see hook_prompt.py).
 Fails open: any problem means print nothing, exit 0."""
-import hashlib
 import json
-import re
 import sys
 import time
 from pathlib import Path
@@ -15,12 +14,6 @@ REASON = ("Switchboard: several installed skills fit this kind of task. Call the
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from switchboard import paths, profiles, route, scan_claude
-
-    def state_file(session_id):
-        sid = str(session_id)
-        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", sid):  # never let session_id pick a path
-            sid = hashlib.sha256(sid.encode()).hexdigest()[:32]
-        return paths.home() / "state" / f"{sid}.json"
 
     def cleanup(now):
         for f in (paths.home() / "state").glob("*.json"):
@@ -40,7 +33,7 @@ try:
         now = time.time()
         event = json.loads(sys.stdin.read())
         cleanup(now)
-        tool, sf = event.get("tool_name", ""), state_file(event["session_id"])
+        tool, sf = event.get("tool_name", ""), paths.session_state(event["session_id"])
         state = json.loads(sf.read_text()) if sf.exists() else {}
         if tool.endswith("__route") and "switchboard" in tool:
             state["routed_at"] = now
@@ -50,6 +43,8 @@ try:
             return
         skill = str((event.get("tool_input") or {}).get("skill") or "")
         if not skill or now - float(state.get("routed_at", 0)) <= WINDOW:
+            return
+        if skill in (state.get("named") or []):  # the user asked for this skill by name: never second-guess them
             return
         if now - float(state.get("nudged_at", 0)) <= WINDOW:  # block once, then let Claude proceed
             return

@@ -1,5 +1,7 @@
 # Switchboard
 
+[![tests](https://github.com/surenganne/switchboard/actions/workflows/test.yml/badge.svg)](https://github.com/surenganne/switchboard/actions/workflows/test.yml)
+
 **Pick the right skill when several fit.** A local router for Claude Code skills and plugins.
 
 You install skills and plugins from many places, and plenty of them overlap: five code reviewers, three
@@ -54,7 +56,8 @@ some are waiting.
 | **4 · Pick** | You | Claude shows the top two or three with a one-line reason each, and you choose. |
 | **5 · Learn** | Switchboard | Your pick is logged locally, shown as a label on similar tasks later, and feeds `/switchboard:audit` and the activity report. |
 
-Skills you invoke yourself (typing `/review`) are never routed.
+Skills you name yourself (typing `/review` or `/ecc:code-review` in your message) are never routed: a prompt
+hook notes the names you typed, and the routing reminder lets those skills straight through for the session.
 
 **When a plugin updates,** the fingerprint of any skill whose text changed no longer matches its profile.
 That skill is marked as changed, the next session start offers `/switchboard:profile`, and only the
@@ -208,7 +211,7 @@ Everything lives in `~/.switchboard/`. Directories are mode 0700 and files 0600.
 | `inventory.json` | Installed skill ids, names, paths, descriptions, hashes |
 | `profiles/*.json` | One profile per skill |
 | `choices.jsonl` | Per pick: date, task features (category, targets, focus, stack, depth, cost), skills offered, skill chosen |
-| `state/` | Per-session timestamps for the reminder hook; deleted after a day |
+| `state/` | Per session: reminder-hook timestamps and the skill names you typed as `/name` (names only, never the message); deleted after a day |
 | `report.html` | The latest activity report, written only when you run `/switchboard:report` |
 | `last_offer.json` | A hash of the unprofiled-skill list, so you are offered profiling only when it changes |
 

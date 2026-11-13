@@ -19,7 +19,8 @@ try:
         if overlap:
             parts.append(f"Switchboard: these task areas have several installed skills: {', '.join(overlap)}. {ROUTE}")
         if n_pending:
-            parts.append(f"{'' if overlap else 'Switchboard: '}{n_pending} skills are not profiled yet; offer /switchboard:profile.")
+            parts.append(f"{'' if overlap else 'Switchboard: '}{n_pending} skills are new or changed since profiling; "
+                         "offer /switchboard:profile.")
         return " ".join(parts)
 
     def pending_is_news(pending) -> bool:

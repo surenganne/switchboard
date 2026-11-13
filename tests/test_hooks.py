@@ -82,15 +82,15 @@ class HooksTest(unittest.TestCase):
         msg = out["additionalContext"]
         self.assertIn("code-review", msg)
         self.assertIn("route", msg)
-        self.assertIn("2 skills are not profiled yet", msg)
+        self.assertIn("2 skills are new or changed since profiling", msg)
 
     def test_session_offers_profiling_only_when_pending_set_changes(self):
         ch, proj = build_fixture(self.root)
         self.env.update(SWITCHBOARD_CLAUDE_HOME=str(ch), CLAUDE_PROJECT_DIR=str(proj))
-        self.assertIn("4 skills are not profiled yet", self.session())
+        self.assertIn("4 skills are new or changed since profiling", self.session())
         self.assertEqual(self.session(), "")  # same pending set: say nothing again
         write(ch / "skills/epsilon/SKILL.md", skill("epsilon", "New skill"))
-        self.assertIn("5 skills are not profiled yet", self.session())
+        self.assertIn("5 skills are new or changed since profiling", self.session())
 
     def test_profiling_offer_is_remembered_per_project(self):
         ch, proj = build_fixture(self.root)
@@ -99,7 +99,7 @@ class HooksTest(unittest.TestCase):
         self.env["SWITCHBOARD_CLAUDE_HOME"] = str(ch)
         for p in (proj, other):
             self.env["CLAUDE_PROJECT_DIR"] = str(p)
-            self.assertIn("not profiled yet", self.session())
+            self.assertIn("new or changed since profiling", self.session())
         for p in (proj, other):  # switching back and forth: nothing new, so no repeat offer
             self.env["CLAUDE_PROJECT_DIR"] = str(p)
             self.assertEqual(self.session(), "")
@@ -116,6 +116,23 @@ class HooksTest(unittest.TestCase):
         self.assertTrue(self.deny(self.pretool("Skill", {"skill": "ecc:code-review"})))
         self.assertIsNone(self.pretool("Skill", {"skill": "review"}))  # another overlapping skill, same window
         self.assertTrue(self.deny(self.pretool("Skill", {"skill": "review"}, sid="s2")))  # user skills by bare name
+
+    def prompt(self, text, sid="s1"):
+        return self.run_hook("hook_prompt.py", json.dumps({"session_id": sid, "hook_event_name": "UserPromptSubmit",
+                                                           "prompt": text}))
+
+    def test_pretool_never_blocks_a_skill_the_user_named(self):
+        self.seed_review_profiles()
+        self.assertEqual(self.prompt("please run /ecc:code-review on this and /review after"), "")  # adds no context
+        self.assertIsNone(self.pretool("Skill", {"skill": "ecc:code-review"}))
+        self.assertIsNone(self.pretool("Skill", {"skill": "review"}))
+        self.assertTrue(self.deny(self.pretool("Skill", {"skill": "ecc:review-pr"})))  # not named: still routed
+        state = json.loads(next((self.sb / "state").glob("*.json")).read_text())
+        self.assertNotIn("please", json.dumps(state))  # names only, never prompt text
+
+    def test_prompt_hook_survives_bad_input(self):
+        self.assertEqual(self.prompt(""), "")
+        self.assertEqual(self.run_hook("hook_prompt.py", "not json"), "")
 
     def test_pretool_allows_after_route(self):
         self.seed_review_profiles()

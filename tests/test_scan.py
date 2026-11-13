@@ -141,6 +141,35 @@ class ScanTest(unittest.TestCase):
         self.assertNotEqual(before["user:alpha"], after["user:alpha"])
         self.assertEqual(before["plug:beta"], after["plug:beta"])
 
+    def test_hash_of_plain_folder_is_unchanged_from_rglob_version(self):
+        # existing profiles stay valid: for a folder without symlinks the fingerprint matches the old rglob formula
+        write(self.ch / "skills/alpha/reference.md", "ref")
+        write(self.ch / "skills/alpha/deep/nested/notes.md", "notes")
+        write(self.ch / "skills/alpha/.hidden/x.md", "hidden")
+        sk = self.ch / "skills/alpha/SKILL.md"
+        old = hashlib.sha256(sk.read_bytes())
+        for p in sorted(p for p in sk.parent.rglob("*.md") if p != sk and p.is_file()):
+            old.update(b"\0" + os.fsencode(p.relative_to(sk.parent)) + b"\0" + p.read_bytes())
+        got = {s["id"]: s["content_hash"] for s in scan_claude.list_skills(self.ch, self.proj)}
+        self.assertEqual(got["user:alpha"], old.hexdigest()[:16])
+
+    def test_hash_does_not_follow_symlinked_folders(self):
+        before = {s["id"]: s["content_hash"] for s in scan_claude.list_skills(self.ch, self.proj)}
+        write(self.root / "outside/secret.md", "not part of the skill")
+        os.symlink(self.root / "outside", self.ch / "skills/alpha/linked")
+        os.symlink(self.ch / "skills/alpha", self.ch / "skills/alpha/loop")  # a cycle must not hang or crash
+        after = {s["id"]: s["content_hash"] for s in scan_claude.list_skills(self.ch, self.proj)}
+        self.assertEqual(before["user:alpha"], after["user:alpha"])
+
+    def test_write_private_refuses_symlink_target(self):
+        target = self.root / "outside.txt"
+        target.write_text("keep")
+        link = paths.home() / "evil.json"
+        os.symlink(target, link)
+        with self.assertRaises(OSError):
+            paths.write_private(link, "overwrite")
+        self.assertEqual(target.read_text(), "keep")
+
     def test_inventory_file_is_private(self):
         p = scan_claude.write_inventory(scan_claude.list_skills(self.ch, self.proj))
         self.assertEqual(p, paths.home() / "inventory.json")
