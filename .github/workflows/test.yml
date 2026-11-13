@@ -14,11 +14,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # 3.9 is macOS's built-in python3; runner images dropped it, so use the official container
         python: ["3.9", "3.12"]
+    container: python:${{ matrix.python }}-slim
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
       - name: Run tests
         run: python3 -m unittest discover -s tests -t . -v
