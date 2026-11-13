@@ -12,13 +12,15 @@ MAX_NAMES = 50
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from switchboard import paths
+    from switchboard import paths, usage
 
     def main():
         event = json.loads(sys.stdin.read())
         names = {n for n in NAME.findall(str(event.get("prompt") or "")) if len(n) <= 100}
         if not names:
             return
+        inv = usage.cached_inventory()
+        usage.record(sorted(i for i in (usage.resolve(n, inv) for n in names) if i))
         sf = paths.session_state(event["session_id"])
         state = json.loads(sf.read_text()) if sf.exists() else {}
         state["named"] = sorted(set(state.get("named") or []) | names)[:MAX_NAMES]

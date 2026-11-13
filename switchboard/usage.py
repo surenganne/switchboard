@@ -25,6 +25,15 @@ def recording_on() -> bool:
         return True
 
 
+def cached_inventory() -> dict:
+    """shortcut: uses the last session's inventory, so a skill installed mid-session is logged from the next session"""
+    try:
+        skills = json.loads((paths.home() / "inventory.json").read_text()).get("skills")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return skills if isinstance(skills, dict) else {}
+
+
 def resolve(name: str, inv: dict):
     """Installed skill id for a name as Claude or the user wrote it, or None (so free text is never stored)."""
     if name in inv:
