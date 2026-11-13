@@ -7,8 +7,8 @@ from pathlib import Path
 from switchboard import profiles
 
 INV = {
-    "user:alpha": {"id": "user:alpha", "path": "/x/alpha/SKILL.md", "content_hash": "a" * 16},
-    "plug:beta": {"id": "plug:beta", "path": "/x/beta/SKILL.md", "content_hash": "b" * 16},
+    "user:alpha": {"id": "user:alpha", "source": "user", "path": "/x/alpha/SKILL.md", "content_hash": "a" * 16},
+    "plug:beta": {"id": "plug:beta", "source": "plug", "path": "/x/beta/SKILL.md", "content_hash": "b" * 16},
 }
 
 
@@ -75,6 +75,17 @@ class ProfilesTest(unittest.TestCase):
         profiles.save(good(), INV)
         (Path(self.tmp.name) / "profiles/junk.json").write_text("{oops")
         self.assertEqual(list(profiles.load_all()), ["user:alpha"])
+
+    def test_load_all_skips_hand_edited_invalid_profile(self):
+        bad = good(id="plug:beta", source="plug", content_hash="b" * 16, categories="code-review")
+        (Path(self.tmp.name) / "profiles").mkdir(exist_ok=True)
+        (Path(self.tmp.name) / "profiles/edited.json").write_text(json.dumps(bad))
+        self.assertEqual(profiles.load_all(), {})
+
+    def test_rejects_source_mismatch(self):
+        inv = {"user:alpha": dict(INV["user:alpha"], source="user")}
+        self.assertTrue(profiles.validate(good(source="ecc"), inv))
+        self.assertEqual(profiles.validate(good(), inv), [])
 
 
 if __name__ == "__main__":

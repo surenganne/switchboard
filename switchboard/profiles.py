@@ -51,6 +51,8 @@ def validate(p: dict, inventory: dict) -> list[str]:
         errs.append("content_hash: does not match the inventory")
     if not isinstance(p.get("source"), str) or len(p["source"]) > 100:
         errs.append("source: string of at most 100 chars")
+    elif rec is not None and "source" in rec and p["source"] != rec["source"]:
+        errs.append("source: does not match the inventory")
     _enum_list(p, "categories", CATEGORIES, 1, 3, errs)
     _enum_list(p, "targets", TARGETS, 0, 6, errs)
     _enum_list(p, "focus", FOCUS, 0, 6, errs)
@@ -86,6 +88,9 @@ def load_all() -> dict[str, dict]:
     for f in sorted((paths.home() / "profiles").glob("*.json")):
         try:
             p = json.loads(f.read_text())
+            # re-check the schema (minus inventory membership) so a hand-edited file cannot slip through
+            if validate(p, {p["id"]: {"content_hash": p["content_hash"], "source": p["source"]}}):
+                continue
             out[p["id"]] = p
         except (OSError, ValueError, KeyError, TypeError):
             continue

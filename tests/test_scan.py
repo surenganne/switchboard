@@ -78,6 +78,53 @@ class ScanTest(unittest.TestCase):
         write(self.root / "plugins/plug/.claude-plugin/plugin.json", json.dumps({"skills": {"a": 1}}))
         self.assertIn("plug:beta", self.ids())
 
+    def install(self, key, entries):
+        f = self.ch / "plugins/installed_plugins.json"
+        data = json.loads(f.read_text())
+        data["plugins"][key] = entries
+        f.write_text(json.dumps(data))
+        s = json.loads((self.ch / "settings.json").read_text())
+        s["enabledPlugins"][key] = True
+        (self.ch / "settings.json").write_text(json.dumps(s))
+
+    def test_install_entry_skips_missing_path_and_other_projects(self):
+        good, other = self.root / "plugins/multi-good", self.root / "plugins/multi-other"
+        write(good / "skills/good/SKILL.md", skill("good", "Good one"))
+        write(other / "skills/other/SKILL.md", skill("other", "Other project's copy"))
+        self.install("multi@mkt", [
+            {"scope": "project", "projectPath": str(self.root / "elsewhere"), "installPath": str(other)},
+            {"scope": "user", "installPath": str(self.root / "plugins/gone")},
+            {"scope": "user", "installPath": str(good)}])
+        ids = self.ids()
+        self.assertIn("multi:good", ids)
+        self.assertNotIn("multi:other", ids)
+        # a project-scoped install for THIS project wins over the user one
+        self.install("multi@mkt", [{"scope": "user", "installPath": str(good)},
+                                   {"scope": "local", "projectPath": str(self.proj), "installPath": str(other)}])
+        self.assertIn("multi:other", self.ids())
+
+    def test_declared_skill_dirs_must_stay_inside_plugin(self):
+        write(self.root / "outside/skills/sneaky/SKILL.md", skill("sneaky", "Outside the plugin"))
+        write(self.root / "plugins/plug/.claude-plugin/plugin.json", json.dumps({"skills": ["../../outside/skills", "skills"]}))
+        ids = self.ids()
+        self.assertNotIn("plug:sneaky", ids)
+        self.assertIn("plug:beta", ids)
+
+    def test_missing_description_falls_back_to_first_body_line(self):
+        write(self.root / "plugins/plug/commands/bare.md", "\n# Bare command\nDoes bare things.\n")
+        write(self.ch / "skills/nodesc/SKILL.md", "---\nname: nodesc\n---\n\nFirst line here.\nMore.\n")
+        rec = {s["id"]: s for s in scan_claude.list_skills(self.ch, self.proj)}
+        self.assertEqual(rec["plug:bare"]["description"], "Bare command")
+        self.assertEqual(rec["user:nodesc"]["description"], "First line here.")
+        self.assertNotIn("user:broken", rec)  # a SKILL.md with no frontmatter at all is still skipped
+
+    def test_hash_covers_files_the_skill_points_to(self):
+        write(self.ch / "skills/alpha/reference.md", "v1")
+        before = {s["id"]: s["content_hash"] for s in scan_claude.list_skills(self.ch, self.proj)}
+        write(self.ch / "skills/alpha/reference.md", "v2")
+        after = {s["id"]: s["content_hash"] for s in scan_claude.list_skills(self.ch, self.proj)}
+        self.assertNotEqual(before["user:alpha"], after["user:alpha"])
+
     def test_hash_changes_when_file_changes(self):
         before = {s["id"]: s["content_hash"] for s in scan_claude.list_skills(self.ch, self.proj)}
         write(self.ch / "skills/alpha/SKILL.md", skill("alpha", "User skill alpha") + "more\n")

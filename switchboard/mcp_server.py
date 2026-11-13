@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from switchboard import choices, profiles, route, scan_claude  # noqa: E402
 
 VERSION = "0.1.0"
+PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")  # newest first; the subset this server speaks
 OBJ = {"type": "object"}
 STRS = {"type": "array", "items": {"type": "string"}}
 TASK = {"type": "object", "description": "Structured task: category (required), targets, focus, stack, depth, cost, summary.",
@@ -78,7 +79,9 @@ def result(payload, is_error=False):
 def handle(msg: dict):
     method, params = msg.get("method"), msg.get("params") or {}
     if method == "initialize":
-        return {"protocolVersion": params.get("protocolVersion", "2025-06-18"), "capabilities": {"tools": {}},
+        asked = params.get("protocolVersion")
+        return {"protocolVersion": asked if asked in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0],
+                "capabilities": {"tools": {}},
                 "serverInfo": {"name": "switchboard", "version": VERSION}}
     if method == "ping":
         return {}

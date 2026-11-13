@@ -1,5 +1,6 @@
-"""PreToolUse hook on Skill: once per skill per 10 minutes, ask Claude to call `route` first when several
-profiled skills fit that kind of task. Fails open: any problem means print nothing, exit 0."""
+"""PreToolUse hook on Skill: when several profiled skills fit that kind of task and `route` was not called
+in the last 10 minutes, block once (per session, per 10 minutes) and ask Claude to call `route` first.
+Fails open: any problem means print nothing, exit 0."""
 import hashlib
 import json
 import re
@@ -13,7 +14,7 @@ REASON = ("Switchboard: several installed skills fit this kind of task. Call the
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from switchboard import paths, profiles, route
+    from switchboard import paths, profiles, route, scan_claude
 
     def state_file(session_id):
         sid = str(session_id)
@@ -40,7 +41,7 @@ try:
         event = json.loads(sys.stdin.read())
         cleanup(now)
         tool, sf = event.get("tool_name", ""), state_file(event["session_id"])
-        state = json.loads(sf.read_text()) if sf.exists() else {"routed_at": 0, "nudged": {}}
+        state = json.loads(sf.read_text()) if sf.exists() else {}
         if tool.endswith("__route") and "switchboard" in tool:
             state["routed_at"] = now
             paths.write_private(sf, json.dumps(state))
@@ -50,14 +51,14 @@ try:
         skill = str((event.get("tool_input") or {}).get("skill") or "")
         if not skill or now - float(state.get("routed_at", 0)) <= WINDOW:
             return
-        if now - float(state.get("nudged", {}).get(skill, 0)) <= WINDOW:
+        if now - float(state.get("nudged_at", 0)) <= WINDOW:  # block once, then let Claude proceed
             return
-        inv = json.loads((paths.home() / "inventory.json").read_text())["skills"]
+        inv = scan_claude.current()  # live scan: the shared inventory.json may belong to another project
         profs = profiles.load_all()
         overlap = set(route.overlap_categories(profs, inv))
         if not any(overlap & set(profs[pid].get("categories") or []) for pid in profile_ids(skill, profs) if pid in inv):
             return
-        state.setdefault("nudged", {})[skill] = now
+        state["nudged_at"] = now
         paths.write_private(sf, json.dumps(state))
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                                  "permissionDecisionReason": REASON}}))

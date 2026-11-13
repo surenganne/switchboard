@@ -72,6 +72,11 @@ class McpTest(unittest.TestCase):
                                    offered=["user:alpha"], chosen="user:alpha")[0])
         self.assertEqual(self.call("forget")[1], {"removed": 1})
 
+    def test_initialize_does_not_claim_unknown_protocol_version(self):
+        got = self.rpc("initialize", {"protocolVersion": "2099-01-01"})["result"]["protocolVersion"]
+        self.assertNotEqual(got, "2099-01-01")
+        self.assertRegex(got, r"^\d{4}-\d{2}-\d{2}$")
+
     def test_bad_json_line_returns_parse_error_and_continues(self):
         err = self.send_raw("{oops\n")
         self.assertEqual(err["error"]["code"], -32700)

@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 from switchboard import frontmatter, paths
@@ -26,12 +27,56 @@ def skill_dirs(root: Path) -> list[Path]:
     if isinstance(declared, str):
         declared = [declared]
     declared = [d for d in declared if isinstance(d, str)] if isinstance(declared, list) else None
+    base = root.resolve()
     dirs = [(root / d).resolve() for d in declared] if declared else [root / "skills"]
-    return [d for d in dirs if d.is_dir()]
+    # a manifest must not point the scanner outside its own plugin
+    return [d for d in dirs if d.is_dir() and (d.resolve() == base or base in d.resolve().parents)]
+
+
+def install_root(entries, project_dir: Path | None) -> Path | None:
+    """Pick the install for this project: a project/local install for this project first, else a
+    general (user) install; entries whose path is gone are skipped."""
+    if not isinstance(entries, list):
+        return None
+    proj = str(project_dir.resolve()) if project_dir is not None else None
+    ok = [e for e in entries if isinstance(e, dict) and isinstance(e.get("installPath"), str)
+          and Path(e["installPath"]).is_dir()]
+    mine = [e for e in ok if isinstance(e.get("projectPath"), str) and proj
+            and str(Path(e["projectPath"]).resolve()) == proj]
+    general = [e for e in ok if not e.get("projectPath")]
+    pick = (mine or general or [None])[0]
+    return Path(pick["installPath"]) if pick else None
 
 
 def project_source(project_dir: Path) -> str:
     return "project:" + hashlib.sha256(str(project_dir.resolve()).encode()).hexdigest()[:8]
+
+
+FM_RE = re.compile(r"^---\s*\n.*?\n---\s*(\n|$)", re.S)
+MAX_EXTRA_FILES, MAX_FILE_BYTES = 200, 1_000_000
+
+
+def _first_line(text: str) -> str:
+    m = FM_RE.match(text)
+    for line in text[m.end() if m else 0:].splitlines():
+        line = line.strip().lstrip("#").strip()
+        if line:
+            return line
+    return ""
+
+
+def _hash(path: Path, kind: str, data: bytes) -> str:
+    """A skill's hash covers every .md in its folder (profiling reads them); a command's, its own file."""
+    h = hashlib.sha256(data)
+    if kind == "skill":
+        extra = sorted(p for p in path.parent.rglob("*.md") if p != path and p.is_file())[:MAX_EXTRA_FILES]
+        for p in extra:
+            try:
+                if p.stat().st_size <= MAX_FILE_BYTES:
+                    h.update(b"\0" + str(p.relative_to(path.parent)).encode() + b"\0" + p.read_bytes())
+            except OSError:
+                continue
+    return h.hexdigest()[:16]
 
 
 def list_skills(claude_home: Path, project_dir: Path | None) -> list[dict]:
@@ -45,12 +90,15 @@ def list_skills(claude_home: Path, project_dir: Path | None) -> list[dict]:
             data = path.read_bytes()
         except OSError:
             return
-        fm = frontmatter.read(path) or {}
-        desc = " ".join(str(fm.get("description") or "").split())
+        text = data.decode("utf-8", errors="replace")
+        fm = frontmatter.read(path)
+        if fm is None and kind == "skill":  # a SKILL.md without frontmatter is not a loadable skill
+            return
+        desc = " ".join(str((fm or {}).get("description") or "").split()) or _first_line(text)
         if not desc:
             return
         out[sid] = {"id": sid, "name": name, "source": source, "kind": kind, "path": str(path),
-                    "description": desc, "content_hash": hashlib.sha256(data).hexdigest()[:16]}
+                    "description": desc[:240], "content_hash": _hash(path, kind, data)}
 
     def skills_in(d, source):
         for sk in sorted(d.glob("*/SKILL.md")):
@@ -76,9 +124,8 @@ def list_skills(claude_home: Path, project_dir: Path | None) -> list[dict]:
             enabled.update(ep)
     installed = _json(claude_home / "plugins/installed_plugins.json").get("plugins") or {}
     for key in sorted(k for k, v in enabled.items() if v):
-        try:
-            root = Path(installed[key][0]["installPath"])
-        except (KeyError, IndexError, TypeError):
+        root = install_root(installed.get(key) if isinstance(installed, dict) else None, project_dir)
+        if root is None:
             continue
         plugin = key.split("@")[0]
         try:  # one odd third-party plugin must not take down the whole scan

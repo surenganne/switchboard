@@ -64,6 +64,7 @@ Everything lives in `~/.switchboard/`. Directories are mode 0700 and files 0600.
 | `profiles/*.json` | One profile per skill |
 | `choices.jsonl` | Per pick: date, task features (category, targets, focus, stack, depth, cost), skills offered, skill chosen |
 | `state/` | Per-session timestamps for the reminder hook; deleted after a day |
+| `last_offer.json` | A hash of the unprofiled-skill list, so you are offered profiling only when it changes |
 
 No prompt text and no code are stored. Feature fields keep only values from the fixed lists. To stop
 recording choices, create `~/.switchboard/settings.json` with `{"record_choices": false}`.

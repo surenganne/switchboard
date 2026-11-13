@@ -7,7 +7,7 @@ import time
 import unittest
 from pathlib import Path
 
-from tests.test_scan import build_fixture
+from tests.test_scan import build_fixture, skill, write
 
 ROOT = Path(__file__).resolve().parent.parent
 FIX = json.loads((ROOT / "tests/fixtures/review_profiles.json").read_text())
@@ -41,10 +41,26 @@ class HooksTest(unittest.TestCase):
         return json.loads(out) if out.strip() else None
 
     def seed_review_profiles(self):
-        from switchboard import paths, profiles
-        paths.write_private(paths.home() / "inventory.json", json.dumps({"version": 1, "skills": FIX["inventory"]}))
-        for p in FIX["profiles"].values():
-            self.assertEqual(profiles.save(p, FIX["inventory"]), [])
+        """A fake ~/.claude holding the fixture's review skills, with the fixture profiles saved against it."""
+        from switchboard import profiles, scan_claude
+        ch = self.root / "rc"
+        write(ch / "skills/review/SKILL.md", skill("review", "Pre-landing review"))
+        installed, enabled = {}, {}
+        for plugin, names in (("ecc", ("code-review", "review-pr", "orch-review")), ("ponytail", ("ponytail-review",))):
+            for n in names:
+                write(self.root / "p" / plugin / "skills" / n / "SKILL.md", skill(n, f"{plugin} {n}"))
+            installed[f"{plugin}@m"] = [{"scope": "user", "installPath": str(self.root / "p" / plugin)}]
+            enabled[f"{plugin}@m"] = True
+        write(ch / "plugins/installed_plugins.json", json.dumps({"plugins": installed}))
+        write(ch / "settings.json", json.dumps({"enabledPlugins": enabled}))
+        self.env["SWITCHBOARD_CLAUDE_HOME"] = str(ch)
+        inv = {s["id"]: s for s in scan_claude.list_skills(ch, None)}
+        for sid, p in FIX["profiles"].items():
+            if sid in inv:
+                self.assertEqual(profiles.save(dict(p, content_hash=inv[sid]["content_hash"]), inv), [])
+
+    def deny(self, out):
+        return out is not None and out["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_session_silent_when_nothing_to_say(self):
         self.assertEqual(self.session(), "")
@@ -68,35 +84,61 @@ class HooksTest(unittest.TestCase):
         self.assertIn("route", msg)
         self.assertIn("2 skills are not profiled yet", msg)
 
+    def test_session_offers_profiling_only_when_pending_set_changes(self):
+        ch, proj = build_fixture(self.root)
+        self.env.update(SWITCHBOARD_CLAUDE_HOME=str(ch), CLAUDE_PROJECT_DIR=str(proj))
+        self.assertIn("4 skills are not profiled yet", self.session())
+        self.assertEqual(self.session(), "")  # same pending set: say nothing again
+        write(ch / "skills/epsilon/SKILL.md", skill("epsilon", "New skill"))
+        self.assertIn("5 skills are not profiled yet", self.session())
+
     def test_pretool_denies_unrouted_overlap_skill_once(self):
         self.seed_review_profiles()
         out = self.pretool("Skill", {"skill": "ecc:code-review"})
-        self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertTrue(self.deny(out))
         self.assertIn("route", out["hookSpecificOutput"]["permissionDecisionReason"])
         self.assertIsNone(self.pretool("Skill", {"skill": "ecc:code-review"}))
-        # user skills are invoked by bare name
-        self.assertEqual(self.pretool("Skill", {"skill": "review"})["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_pretool_blocks_once_per_session_not_per_skill(self):
+        self.seed_review_profiles()
+        self.assertTrue(self.deny(self.pretool("Skill", {"skill": "ecc:code-review"})))
+        self.assertIsNone(self.pretool("Skill", {"skill": "review"}))  # another overlapping skill, same window
+        self.assertTrue(self.deny(self.pretool("Skill", {"skill": "review"}, sid="s2")))  # user skills by bare name
 
     def test_pretool_allows_after_route(self):
         self.seed_review_profiles()
         self.assertIsNone(self.pretool(ROUTE_TOOL, {"task": {"category": "code-review"}}))
         self.assertIsNone(self.pretool("Skill", {"skill": "ecc:code-review"}))
-        # another session has not routed
-        self.assertIsNotNone(self.pretool("Skill", {"skill": "ecc:code-review"}, sid="s2"))
+        self.assertIsNotNone(self.pretool("Skill", {"skill": "ecc:code-review"}, sid="s2"))  # another session has not routed
 
     def test_pretool_allows_non_overlap_skill(self):
         self.seed_review_profiles()
         self.assertIsNone(self.pretool("Skill", {"skill": "some:unprofiled"}))
         self.assertIsNone(self.pretool("Bash", {"command": "ls"}))
 
+    def test_pretool_uses_live_scan_not_shared_inventory_file(self):
+        self.seed_review_profiles()
+        # another session in another project overwrote the shared inventory
+        (self.sb / "inventory.json").write_text(json.dumps({"version": 1, "skills": {}}))
+        self.assertTrue(self.deny(self.pretool("Skill", {"skill": "ecc:code-review"})))
+
+    def test_pretool_ignores_uninstalled_skill(self):
+        self.seed_review_profiles()
+        import shutil
+        shutil.rmtree(self.root / "p/ecc/skills/review-pr")
+        shutil.rmtree(self.root / "p/ecc/skills/orch-review")
+        shutil.rmtree(self.root / "p/ecc/skills/code-review")
+        shutil.rmtree(self.root / "rc/skills/review")
+        self.assertIsNone(self.pretool("Skill", {"skill": "ponytail:ponytail-review"}))  # only one left: no overlap
+
     def test_pretool_fails_open_on_garbage_stdin_and_corrupt_state(self):
         self.seed_review_profiles()
         self.assertEqual(self.run_hook("hook_pretool.py", "not json"), "")
-        self.assertEqual(self.run_hook("hook_session.py", "not json"), "")
+        self.run_hook("hook_session.py", "not json")  # reads no stdin; must still exit 0
         (self.sb / "state").mkdir(exist_ok=True)
         (self.sb / "state/s1.json").write_text("{oops")
         self.assertIsNone(self.pretool("Skill", {"skill": "ecc:code-review"}))
-        (self.sb / "inventory.json").write_text("{oops")
+        (self.sb / "state/s3.json").write_text("[1, 2]")
         self.assertIsNone(self.pretool("Skill", {"skill": "ecc:code-review"}, sid="s3"))
 
     def test_pretool_session_id_cannot_escape_state_dir(self):
