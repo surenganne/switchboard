@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/switchboard/hook_session.py\"", "timeout": 10}]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Skill|mcp__plugin_switchboard_switchboard__route",
+        "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/switchboard/hook_pretool.py\"", "timeout": 10}]
+      }
+    ]
+  }
+}

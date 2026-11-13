@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -42,10 +41,7 @@ TOOLS = [
 ]
 
 
-def inventory() -> dict:
-    claude_home = Path(os.environ.get("SWITCHBOARD_CLAUDE_HOME") or Path.home() / ".claude")
-    project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
-    return {s["id"]: s for s in scan_claude.list_skills(claude_home, project)}
+inventory = scan_claude.current
 
 
 def call_tool(name: str, args: dict):

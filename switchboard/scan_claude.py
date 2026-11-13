@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 from switchboard import frontmatter, paths
@@ -83,6 +84,13 @@ def list_skills(claude_home: Path, project_dir: Path | None) -> list[dict]:
             skills_in(d, plugin)
         commands_in(root / "commands", plugin)
     return list(out.values())
+
+
+def current() -> dict:
+    """Skills mapping {id: record} for this session (env overrides for tests)."""
+    claude_home = Path(os.environ.get("SWITCHBOARD_CLAUDE_HOME") or Path.home() / ".claude")
+    project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+    return {s["id"]: s for s in list_skills(claude_home, project)}
 
 
 def write_inventory(skills: list[dict]) -> Path:
