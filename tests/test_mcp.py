@@ -49,7 +49,24 @@ class McpTest(unittest.TestCase):
         self.proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
         self.assertIn("result", self.rpc("ping"))
         tools = {t["name"] for t in self.rpc("tools/list")["result"]["tools"]}
-        self.assertEqual(tools, {"route", "record_choice", "pending_profiles", "save_profile", "status", "audit", "forget", "report"})
+        self.assertEqual(tools, {"route", "record_choice", "pending_profiles", "save_profile", "pending_roles", "set_role",
+                                 "status", "audit", "forget", "report"})
+
+    def test_role_backfill_roundtrip(self):
+        err, pend = self.call("pending_profiles", limit=20)
+        alpha = next(p for p in pend["pending"] if p["id"] == "user:alpha")
+        prof = {"id": "user:alpha", "source": alpha["source"], "content_hash": alpha["content_hash"],
+                "categories": ["code-review"], "does": "Reviews things.", "targets": ["pr"], "focus": [],
+                "depth": "standard", "cost": "single-pass", "stack": ["any"], "best_for": [], "not_for": []}
+        self.assertTrue(self.call("save_profile", profile=prof)[1]["saved"])
+        self.assertEqual(self.call("status")[1]["missing_role"], 1)
+        err, roles = self.call("pending_roles", limit=10)
+        self.assertEqual([(r["id"], r["name"], r["description"]) for r in roles["pending"]],
+                         [("user:alpha", "alpha", "User skill alpha")])
+        self.assertEqual(roles["pending"][0]["content_hash"], alpha["content_hash"])
+        err, ok = self.call("set_role", id="user:alpha", content_hash=alpha["content_hash"], role="performs")
+        self.assertEqual(ok, {"saved": True, "errors": []})
+        self.assertEqual(self.call("status")[1]["missing_role"], 0)
 
     def test_save_then_route_roundtrip(self):
         err, pend = self.call("pending_profiles", limit=20)

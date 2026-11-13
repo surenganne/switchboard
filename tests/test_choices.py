@@ -26,7 +26,8 @@ class ChoicesTest(unittest.TestCase):
     def test_record_drops_summary(self):
         choices.record(TASK, ["a:x", "b:y"], "b:y")
         (row,) = self.lines()
-        self.assertEqual(set(row), {"date", "category", "targets", "focus", "stack", "depth", "cost", "offered", "chosen"})
+        self.assertEqual(set(row), {"date", "category", "targets", "focus", "stack", "depth", "cost", "role", "offered",
+                                    "chosen"})
         self.assertNotIn("payments", self.log.read_text())
         self.assertEqual(row["chosen"], "b:y")
         self.assertEqual(self.log.stat().st_mode & 0o777, 0o600)
@@ -37,6 +38,11 @@ class ChoicesTest(unittest.TestCase):
         (row,) = self.lines()
         self.assertEqual(row["targets"], ["pr"])
         self.assertIsNone(row["depth"])
+
+    def test_record_keeps_known_role_only(self):
+        choices.record(dict(TASK, role="assists"), ["a:x"], "a:x")
+        choices.record(dict(TASK, role="respond to Bob's comments"), ["a:x"], "a:x")
+        self.assertEqual([r["role"] for r in self.lines()], ["assists", None])
 
     def test_record_keeps_only_known_skill_ids(self):
         choices.record(TASK, ["a:x", "please fix the bug in payments.py"], "my secret prompt text", known={"a:x", "b:y"})

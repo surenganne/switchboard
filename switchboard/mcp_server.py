@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from switchboard import choices, profiles, report, route, scan_claude  # noqa: E402
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")  # newest first; the subset this server speaks
 OBJ = {"type": "object"}
 STRS = {"type": "array", "items": {"type": "string"}}
@@ -19,6 +19,8 @@ TASK = {"type": "object", "description": "Structured task: category (required), 
                        "focus": {"type": "array", "items": {"type": "string", "enum": list(profiles.FOCUS)}},
                        "stack": STRS, "depth": {"type": "string", "enum": list(profiles.DEPTHS)},
                        "cost": {"type": "string", "enum": list(profiles.COSTS)},
+                       "role": {"type": "string", "enum": list(profiles.ROLES),
+                                "description": "performs (default): do the task; assists: work around it; meta: manage skills/settings"},
                        "summary": {"type": "string", "description": "One line; never stored."}},
         "required": ["category"]}
 
@@ -36,6 +38,11 @@ TOOLS = [
      "inputSchema": schema({"limit": {"type": "integer", "minimum": 1, "maximum": 1000}})},
     {"name": "save_profile", "description": "Validate and save one skill profile.",
      "inputSchema": schema({"profile": OBJ}, ["profile"])},
+    {"name": "pending_roles", "description": "Profiled skills with no role yet, with name and description to judge it.",
+     "inputSchema": schema({"limit": {"type": "integer", "minimum": 1, "maximum": 1000}})},
+    {"name": "set_role", "description": "Set only the role of a current profile.",
+     "inputSchema": schema({"id": {"type": "string"}, "content_hash": {"type": "string"},
+                            "role": {"type": "string", "enum": list(profiles.ROLES)}}, ["id", "content_hash", "role"])},
     {"name": "status", "description": "Counts of skills, profiles, pending and overlapping categories.", "inputSchema": schema()},
     {"name": "audit", "description": "Task types where the user keeps passing over the top pick.", "inputSchema": schema()},
     {"name": "forget", "description": "Delete the local choice log. Pass confirm: true only after the user agreed.",
@@ -71,9 +78,19 @@ def call_tool(name: str, args: dict):
     if name == "save_profile":
         errs = profiles.save(args.get("profile"), inventory())
         return {"saved": not errs, "errors": errs}
+    if name == "pending_roles":
+        inv = inventory()
+        pend = profiles.pending_roles(inv)
+        limit = max(1, min(int(args.get("limit") or 100), 1000))
+        return {"total": len(pend), "pending": [dict(p, name=inv[p["id"]].get("name"), description=inv[p["id"]].get("description"))
+                                                for p in pend[:limit]]}
+    if name == "set_role":
+        errs = profiles.set_role(args.get("id"), args.get("content_hash"), args.get("role"), inventory())
+        return {"saved": not errs, "errors": errs}
     if name == "status":
         inv, profs = inventory(), profiles.load_all()
         return {"skills": len(inv), "profiled": sum(1 for s in profs if s in inv),
+                "missing_role": len(profiles.pending_roles(inv)),
                 "pending": len(profiles.pending(inv)), "overlap_categories": route.overlap_categories(profs, inv)}
     if name == "audit":
         return {"groups": choices.audit()}

@@ -18,8 +18,10 @@ FOCUS = ("security", "correctness", "bloat", "performance", "merge-readiness", "
          "style", "tests", "architecture", "ux", "cost", "reliability")
 DEPTHS = ("quick", "standard", "thorough")
 COSTS = ("single-pass", "multi-agent", "workflow")
+ROLES = ("performs", "assists", "meta")  # does the task / works around it / manages skills, settings or the agent
 KEYS = {"id", "source", "content_hash", "categories", "does", "targets", "focus", "depth", "cost",
         "stack", "best_for", "not_for"}
+OPTIONAL = {"role"}  # profiles saved before roles existed stay valid until backfilled
 STACK_RE = re.compile(r"^[a-z0-9.+#-]+$")
 
 
@@ -41,9 +43,11 @@ def validate(p: dict, inventory: dict) -> list[str]:
     if not isinstance(p, dict):
         return ["profile must be an object"]
     errs = []
-    if set(p) != KEYS:
-        extra, missing = sorted(set(p) - KEYS), sorted(KEYS - set(p))
+    if set(p) - OPTIONAL != KEYS:
+        extra, missing = sorted(set(p) - KEYS - OPTIONAL), sorted(KEYS - set(p))
         errs.append(f"keys must be exactly the schema fields (extra: {extra}, missing: {missing})")
+    if "role" in p and p["role"] not in ROLES:
+        errs.append(f"role: one of {', '.join(ROLES)}")
     rec = inventory.get(p.get("id")) if isinstance(p.get("id"), str) else None
     if rec is None:
         errs.append("id: not in the current inventory")
@@ -81,6 +85,24 @@ def save(p: dict, inventory: dict) -> list[str]:
     if not errs:
         paths.write_private(_file(p["id"]), json.dumps(p, indent=1, sort_keys=True))
     return errs
+
+
+def set_role(sid, content_hash, role, inventory: dict) -> list[str]:
+    """Add or change only the role of an existing, current profile."""
+    if role not in ROLES:
+        return [f"role: one of {', '.join(ROLES)}"]
+    p = load_all().get(sid) if isinstance(sid, str) else None
+    if p is None or sid not in inventory:
+        return ["id: no saved profile for an installed skill with this id"]
+    if content_hash != p["content_hash"] or content_hash != inventory[sid].get("content_hash"):
+        return ["content_hash: the skill changed since it was profiled; re-profile it instead"]
+    return save(dict(p, role=role), inventory)
+
+
+def pending_roles(inventory: dict) -> list[dict]:
+    """Installed, current profiles that have no role yet."""
+    return [{"id": sid, "content_hash": p["content_hash"]} for sid, p in sorted(load_all().items())
+            if "role" not in p and sid in inventory and p["content_hash"] == inventory[sid].get("content_hash")]
 
 
 def load_all() -> dict[str, dict]:
