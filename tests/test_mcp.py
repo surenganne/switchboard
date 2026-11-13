@@ -74,7 +74,9 @@ class McpTest(unittest.TestCase):
         self.assertFalse(err)
         self.assertTrue(rep["path"].endswith("report.html"))
         self.assertEqual((rep["picks"], rep["skills"]), (1, 4))
-        self.assertEqual(self.call("forget")[1], {"removed": 1})
+        err, refused = self.call("forget")  # deleting needs an explicit confirm
+        self.assertEqual((refused["removed"], refused["error"][:8]), (0, "confirm:"))
+        self.assertEqual(self.call("forget", confirm=True)[1], {"removed": 1})
 
     def test_record_choice_resolves_bare_name_and_rejects_unknown(self):
         log = Path(self.tmp.name) / "sbhome" / "choices.jsonl"

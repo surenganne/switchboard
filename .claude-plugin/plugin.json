@@ -1,6 +1,6 @@
 {
   "name": "switchboard",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Profiles every installed skill and, when several fit a task, offers you the best two or three with reasons.",
   "author": {
     "name": "Switchboard contributors"

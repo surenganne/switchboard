@@ -5,5 +5,5 @@ This deletes `~/.switchboard/choices.jsonl`, the local log of which skill you pi
 Profiles are kept.
 
 First ask the user to confirm with AskUserQuestion (options: "Delete my choice history", "Keep it").
-Only if they confirm, call the switchboard `forget` tool and report how many entries were removed.
+Only if they confirm, call the switchboard `forget` tool with `confirm: true` and report how many entries were removed.
 To stop recording instead, tell them to put `{"record_choices": false}` in `~/.switchboard/settings.json`.
