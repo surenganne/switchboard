@@ -1,0 +1,8 @@
+{
+  "name": "switchboard",
+  "version": "0.1.0",
+  "description": "Profiles every installed skill and, when several fit a task, offers you the best two or three with reasons.",
+  "author": {"name": "Switchboard contributors"},
+  "license": "MIT",
+  "keywords": ["skills", "routing", "claude-code"]
+}
