@@ -54,7 +54,24 @@ Skills you invoke yourself (typing `/review`) are never routed.
 | `/switchboard:profile` | Profile new or changed skills |
 | `/switchboard:status` | Counts and overlapping task areas |
 | `/switchboard:audit` | Task types where you keep passing over the top pick |
+| `/switchboard:report` | Build a local HTML report of your activity (see below) |
 | `/switchboard:forget` | Delete your choice history (asks first) |
+
+## Activity report
+
+`/switchboard:report` writes `~/.switchboard/report.html` and tells you its path. Open it in any browser
+(`open ~/.switchboard/report.html` on macOS). The page is one self-contained file: no scripts, nothing
+loaded from the network, readable only by you (mode 0600). It shows:
+
+- installed skills, how many are profiled, picks recorded, and how often you passed over the top suggestion
+- picks per week (up to the last 26 weeks)
+- the most chosen skills, as times chosen out of times offered
+- picks and overrides by task area
+- task types where you keep passing over the top pick, with the skills you chose instead
+- profiling coverage by source, and how many profiles are out of date
+
+It follows your system's light or dark setting. Run the command again whenever you want fresh numbers;
+the activity sections stay empty until you have picked a skill from a Switchboard suggestion.
 
 ## Privacy
 
@@ -66,12 +83,13 @@ Everything lives in `~/.switchboard/`. Directories are mode 0700 and files 0600.
 | `profiles/*.json` | One profile per skill |
 | `choices.jsonl` | Per pick: date, task features (category, targets, focus, stack, depth, cost), skills offered, skill chosen |
 | `state/` | Per-session timestamps for the reminder hook; deleted after a day |
+| `report.html` | The latest activity report, written only when you run `/switchboard:report` |
 | `last_offer.json` | A hash of the unprofiled-skill list, so you are offered profiling only when it changes |
 
 No prompt text and no code are stored. Feature fields keep only values from the fixed lists. To stop
 recording choices, create `~/.switchboard/settings.json` with `{"record_choices": false}`.
 
-## Limits in v0.1
+## Limits in v0.2
 
 - Claude Code only. The scanner sits behind a small interface (`list_skills`) so other platforms can follow.
 - Built-in Claude Code skills (such as `code-review` and `simplify`) have no files on disk, so they are not

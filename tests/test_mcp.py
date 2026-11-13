@@ -49,7 +49,7 @@ class McpTest(unittest.TestCase):
         self.proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
         self.assertIn("result", self.rpc("ping"))
         tools = {t["name"] for t in self.rpc("tools/list")["result"]["tools"]}
-        self.assertEqual(tools, {"route", "record_choice", "pending_profiles", "save_profile", "status", "audit", "forget"})
+        self.assertEqual(tools, {"route", "record_choice", "pending_profiles", "save_profile", "status", "audit", "forget", "report"})
 
     def test_save_then_route_roundtrip(self):
         err, pend = self.call("pending_profiles", limit=20)
@@ -70,6 +70,10 @@ class McpTest(unittest.TestCase):
         self.assertEqual((st["skills"], st["profiled"], st["pending"]), (4, 1, 3))
         self.assertFalse(self.call("record_choice", task={"category": "code-review", "targets": ["pr"]},
                                    offered=["user:alpha"], chosen="user:alpha")[0])
+        err, rep = self.call("report")
+        self.assertFalse(err)
+        self.assertTrue(rep["path"].endswith("report.html"))
+        self.assertEqual((rep["picks"], rep["skills"]), (1, 4))
         self.assertEqual(self.call("forget")[1], {"removed": 1})
 
     def test_initialize_does_not_claim_unknown_protocol_version(self):

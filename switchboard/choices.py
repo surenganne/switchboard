@@ -57,7 +57,7 @@ def record(task: dict, offered: list[str], chosen: str, known=None) -> None:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
-def _rows() -> list[dict]:
+def rows() -> list[dict]:
     try:
         text = _log().read_text(encoding="utf-8")
     except OSError:
@@ -81,7 +81,7 @@ def similar(task: dict) -> list[dict]:
     f = features(task)
     want = _bag(f)
     out = []
-    for row in _rows():
+    for row in rows():
         if row.get("category") != f["category"]:
             continue
         have = _bag(row)
@@ -92,8 +92,14 @@ def similar(task: dict) -> list[dict]:
 
 
 def audit() -> list[dict]:
+    return audit_rows(rows())
+
+
+def audit_rows(log: list) -> list[dict]:
     groups = defaultdict(list)
-    for row in _rows():
+    for row in log:
+        if not isinstance(row, dict):
+            continue
         offered = row.get("offered") or []
         if offered and isinstance(row.get("chosen"), str) and row["chosen"] != offered[0]:
             key = (row.get("category"), tuple(sorted(row.get("targets") or [])), tuple(sorted(row.get("focus") or [])))
@@ -104,7 +110,7 @@ def audit() -> list[dict]:
 
 
 def forget() -> int:
-    n = len(_rows())
+    n = len(rows())
     try:
         _log().unlink()
     except FileNotFoundError:
