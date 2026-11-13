@@ -76,6 +76,17 @@ class McpTest(unittest.TestCase):
         self.assertEqual((rep["picks"], rep["skills"]), (1, 4))
         self.assertEqual(self.call("forget")[1], {"removed": 1})
 
+    def test_record_choice_resolves_bare_name_and_rejects_unknown(self):
+        log = Path(self.tmp.name) / "sbhome" / "choices.jsonl"
+        task = {"category": "code-review"}
+        err, ok = self.call("record_choice", task=task, offered=["user:alpha"], chosen="alpha")
+        self.assertEqual((err, ok), (False, {"recorded": True, "chosen": "user:alpha"}))
+        err, bad = self.call("record_choice", task=task, offered=["user:alpha"], chosen="nope")
+        self.assertTrue(bad["error"].startswith("chosen:"))
+        self.assertFalse(bad["recorded"])
+        rows = [json.loads(x) for x in log.read_text().splitlines()]
+        self.assertEqual([r["chosen"] for r in rows], ["user:alpha"])  # the unknown pick wrote nothing
+
     def test_initialize_does_not_claim_unknown_protocol_version(self):
         got = self.rpc("initialize", {"protocolVersion": "2099-01-01"})["result"]["protocolVersion"]
         self.assertNotEqual(got, "2099-01-01")

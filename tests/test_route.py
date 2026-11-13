@@ -52,6 +52,17 @@ class RouteTest(unittest.TestCase):
             got = [c["id"] for c in route.route(dict(task, category="code-review"), profs, inv, [])["candidates"]]
             self.assertEqual(got[0], want, (task, got))
 
+    def test_full_task_match_outranks_narrow_partial_match(self):
+        # real case: a "respond to review comments" helper (one target, one focus) beat /review on a PR review
+        base = dict(FIX["profiles"]["builtin:code-review"], depth="standard", cost="single-pass", stack=["any"])
+        profs = {"aaa:narrow": dict(base, id="aaa:narrow", targets=["pr"], focus=["correctness"]),
+                 "zzz:broad": dict(base, id="zzz:broad", targets=["pr", "local-diff"],
+                                   focus=["correctness", "security", "merge-readiness", "tests"])}
+        inv = {sid: dict(FIX["inventory"]["builtin:code-review"], id=sid) for sid in profs}
+        task = {"category": "code-review", "targets": ["pr"], "focus": ["correctness", "merge-readiness"]}
+        got = [c["id"] for c in route.route(task, profs, inv, [])["candidates"]]
+        self.assertEqual(got, ["zzz:broad", "aaa:narrow"])
+
     def test_uninstalled_skill_excluded(self):
         inv = copy.deepcopy(FIX["inventory"])
         del inv["user:review"]

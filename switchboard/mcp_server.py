@@ -52,8 +52,15 @@ def call_tool(name: str, args: dict):
         task = args.get("task") or {}
         return route.route(task, profiles.load_all(), inventory(), choices.similar(task))
     if name == "record_choice":
-        choices.record(args.get("task") or {}, args.get("offered") or [], args.get("chosen"), known=set(inventory()))
-        return {"recorded": True}
+        known = set(inventory())
+        chosen = args.get("chosen")
+        if isinstance(chosen, str) and chosen not in known:  # a bare skill name maps to its id when unambiguous
+            matches = [sid for sid in known if sid.rsplit(":", 1)[-1] == chosen]
+            chosen = matches[0] if len(matches) == 1 else chosen
+        if chosen not in known:
+            return {"recorded": False, "error": "chosen: not an installed skill id (pass the full id, e.g. user:review)"}
+        choices.record(args.get("task") or {}, args.get("offered") or [], chosen, known=known)
+        return {"recorded": True, "chosen": chosen}
     if name == "pending_profiles":
         inv = inventory()
         pend = profiles.pending(inv)
