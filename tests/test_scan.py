@@ -63,6 +63,17 @@ class ScanTest(unittest.TestCase):
         self.assertEqual(rec["plug:beta"]["source"], "plug")
         self.assertEqual(len(rec["user:alpha"]["content_hash"]), 16)
 
+    def test_hygiene_fields(self):
+        write(self.ch / "skills/long/SKILL.md", skill("long", "x" * 300))
+        rec = {s["id"]: s for s in scan_claude.list_skills(self.ch, self.proj)}
+        self.assertEqual(rec["plug:beta"]["plugin_key"], "plug@mkt")
+        self.assertEqual(rec["plug:gamma-cmd"]["plugin_key"], "plug@mkt")
+        self.assertNotIn("plugin_key", rec["user:alpha"])
+        self.assertNotIn("plugin_key", rec[f"project:{self.phash}:delta"])
+        self.assertEqual(rec["user:alpha"]["desc_chars"], len("User skill alpha"))
+        self.assertEqual(rec["user:long"]["desc_chars"], 300)
+        self.assertEqual(len(rec["user:long"]["description"]), 240)
+
     def test_skips_disabled_missing_and_broken(self):
         ids = self.ids()
         for bad in ("off:offskill", "user:broken"):
