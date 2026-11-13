@@ -69,6 +69,10 @@ def summarise(inventory: dict, profiles: dict, rows: list) -> dict:
         "by_category": sorted(((c, cat_picks[c], cat_over[c]) for c in cat_picks), key=lambda x: (-x[1], x[0])),
         "by_source": sorted((s, src_all[s], src_prof[s]) for s in src_all),
         "audit": choices.audit_rows(rows),
+        "profiled_skills": sorted(
+            ((s, ", ".join(str(c) for c in (p.get("categories") or [])), str(p.get("does") or ""),
+              chosen[s], offered[s], p.get("content_hash") != inventory[s].get("content_hash"))
+             for s, p in installed.items()), key=lambda x: (-x[3], -x[4], x[0])),
     }
 
 
@@ -155,6 +159,14 @@ def render(s: dict) -> str:
     stale = (f'<p class="empty">{s["stale"]} profiled skills changed since profiling; '
              "run /switchboard:profile to refresh.</p>" if s["stale"] else "")
     out.append(f"<section><h2>Profiling coverage</h2>{coverage}{stale}</section>")
+    if s["profiled_skills"]:
+        out.append(f'<section><details><summary><h2 style="display:inline">Profiled skills ({len(s["profiled_skills"])})'
+                   '</h2></summary><p class="empty">Most chosen first. Use your browser\'s Find to search. '
+                   "* = changed since profiling.</p>" + _table(
+                       ("Skill", "Categories", "What it does", "Chosen", "Offered"),
+                       [(sid + (" *" if old else ""), cats or "–", does or "–", c, o)
+                        for sid, cats, does, c, o, old in s["profiled_skills"]], numeric=(3, 4))
+                   + "</details></section>")
     out.append("</main><footer>Switchboard · local report · task features and skill ids only, never prompt text</footer>")
     return "\n".join(out)
 
