@@ -1,6 +1,9 @@
-"""Local activity report: one self-contained HTML page built from ~/.switchboard. No network, no scripts."""
+"""Local activity report: one self-contained HTML page built from ~/.switchboard. No network.
+The only script is the bundled sticker player (stickers/report.ts), pinned by a CSP hash so nothing else can run."""
 from __future__ import annotations
 
+import base64
+import hashlib
 import html
 from collections import Counter
 from datetime import date, datetime, timedelta
@@ -10,6 +13,9 @@ from switchboard import choices, paths
 
 MAX_WEEKS = 26
 TOP_N = 10
+STICKERS = (Path(__file__).parent / "stickers.js").read_text()
+CSP = ("default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-"
+       + base64.b64encode(hashlib.sha256(STICKERS.encode()).digest()).decode() + "'")
 
 
 def _week(d: date) -> str:
@@ -104,7 +110,15 @@ section{margin-bottom:16px}h2{margin:0 0 10px;font-size:15px;color:var(--head)}
 th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--rule)}th{color:var(--muted);font-weight:600}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .empty{color:var(--muted)}footer{color:var(--muted);font-size:12px;text-align:center;padding:8px 16px 24px}
+.tile{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.st{display:block;flex:none;width:56px;height:56px}h2 .st{width:36px;height:36px}.empty .st{width:96px;height:96px;margin:0 auto 8px}
+h2{display:flex;align-items:center;gap:8px}
 """
+
+
+def _st(name):
+    """Decorative sticker; the text beside it carries the meaning. Names are fixed here, never from data."""
+    return f'<canvas class="st" data-sticker="{name}" aria-hidden="true"></canvas>'
 
 
 def _table(head, rows, numeric=()):
@@ -118,30 +132,31 @@ def _table(head, rows, numeric=()):
 def render(s: dict) -> str:
     """Every value from skills or the log is escaped: skill ids and sources are untrusted text."""
     e = html.escape
-    tiles = [(s["skills"], "installed skills"),
-             (f'{s["profiled"]} ({_pct(s["profiled"], s["skills"])})', "profiled"),
-             (s["picks"], "picks recorded"),
-             (_pct(s["overrides"], s["picks"]), "picks that passed over the top suggestion")]
-    out = [f"<title>Switchboard report</title><style>{CSS}</style>",
+    tiles = [(s["skills"], "installed skills", "folder"),
+             (f'{s["profiled"]} ({_pct(s["profiled"], s["skills"])})', "profiled", "search"),
+             (s["picks"], "picks recorded", "pin"),
+             (_pct(s["overrides"], s["picks"]), "picks that passed over the top suggestion", "toggle")]
+    out = [f'<meta http-equiv="Content-Security-Policy" content="{CSP}">',
+           f"<title>Switchboard report</title><style>{CSS}</style>",
            f'<header><h1>Switchboard report</h1><p>Generated {e(s["generated"])} from ~/.switchboard on this machine. '
            "Nothing here leaves your computer.</p></header><main>",
-           '<div class="tiles">' + "".join(f'<div class="tile"><b>{e(str(v))}</b><span>{e(t)}</span></div>'
-                                           for v, t in tiles) + "</div>"]
+           '<div class="tiles">' + "".join(f'<div class="tile"><div><b>{e(str(v))}</b><span>{e(t)}</span></div>{_st(st)}</div>'
+                                           for v, t, st in tiles) + "</div>"]
 
     if not s["picks"]:
-        out.append('<section><h2>Activity</h2><p class="empty">No picks yet. When Switchboard offers you a choice of '
+        out.append(f'<section><h2>Activity</h2><p class="empty">{_st("mailbox")}No picks yet. When Switchboard offers you a choice of '
                    "skills and you pick one, it shows up here.</p></section>")
     else:
         peak = max(n for _, n in s["weeks"]) or 1
         cols = "".join(f'<div class="col" title="{e(w)}: {n} picks"><small>{n or ""}</small>'
                        f'<i style="height:{max(1, round(100 * n / peak))}%"></i></div>' for w, n in s["weeks"])
-        out.append(f'<section><h2>Picks per week</h2><div class="chart">{cols}</div>'
+        out.append(f'<section><h2>{_st("calendar")}Picks per week</h2><div class="chart">{cols}</div>'
                    f'<div class="axis"><span>{e(s["weeks"][0][0])}</span><span>{e(s["weeks"][-1][0])}</span></div></section>')
         peak = s["top_skills"][0][1]
         bars = "".join(f'<div class="hbar" title="{e(sid)}: chosen {c} of {o} times offered"><code>{e(sid)}</code>'
                        f'<div class="track"><i style="width:{round(100 * c / peak)}%"></i></div>'
                        f'<span class="num">{c} / {o}</span></div>' for sid, c, o in s["top_skills"])
-        out.append(f'<section><h2>Most chosen skills</h2><p class="empty">Times chosen / times offered.</p>{bars}</section>')
+        out.append(f'<section><h2>{_st("trophy")}Most chosen skills</h2><p class="empty">Times chosen / times offered.</p>{bars}</section>')
         out.append("<section><h2>By task area</h2>" + _table(
             ("Category", "Picks", "Passed over top pick", "Rate"),
             [(c, n, o, _pct(o, n)) for c, n, o in s["by_category"]], numeric=(1, 2, 3)) + "</section>")
@@ -167,7 +182,9 @@ def render(s: dict) -> str:
                        [(sid + (" *" if old else ""), cats or "–", does or "–", c, o)
                         for sid, cats, does, c, o, old in s["profiled_skills"]], numeric=(3, 4))
                    + "</details></section>")
-    out.append("</main><footer>Switchboard · local report · task features and skill ids only, never prompt text</footer>")
+    out.append("</main><footer>Switchboard · local report · task features and skill ids only, never prompt text · "
+               "stickers by fun-isometric (Kelvin Adithya, MIT)</footer>")
+    out.append(f"<script>{STICKERS}</script>")
     return "\n".join(out)
 
 

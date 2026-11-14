@@ -1,5 +1,8 @@
+import base64
+import hashlib
 import json
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -52,9 +55,20 @@ class ReportTest(unittest.TestCase):
         bad = "x:<script>alert(1)</script>"
         inv = dict(INV, **{bad: {"id": bad, "source": "<b>x", "content_hash": "h"}})
         page = report.render(report.summarise(inv, PROFS, ROWS + [row("2026-11-12", bad, offered=(bad,))]))
-        self.assertNotIn("<script", page.lower())
+        self.assertEqual(page.lower().count("<script"), 1)  # only the bundled sticker player
         self.assertIn("&lt;script&gt;", page)
         self.assertNotRegex(page, r"(?i)(src|href|url)\s*[=(]\s*[\"']?(https?:)?//")
+
+    def test_sticker_script_is_pinned_by_csp(self):
+        page = report.render(report.summarise(INV, PROFS, ROWS))
+        script = re.search(r"<script>(.*)</script>", page, re.S).group(1)
+        self.assertNotIn("</script", script.lower())
+        digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
+        csp = re.search(r'Content-Security-Policy" content="([^"]+)"', page).group(1)
+        self.assertIn("default-src 'none'", csp)
+        self.assertIn(f"script-src 'sha256-{digest}'", csp)
+        for name in re.findall(r'data-sticker="([^"]+)"', page):
+            self.assertIn(name, ("folder", "search", "pin", "toggle", "calendar", "trophy", "mailbox"))
 
     def test_empty_data_renders(self):
         page = report.render(report.summarise({}, {}, []))
