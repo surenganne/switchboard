@@ -4,6 +4,12 @@
   "dependencies": {
     "switchboard/hook_*.py": [
       "tests/test_hooks.py"
+    ],
+    "switchboard/stickers.js": [
+      "tests/test_report.py"
+    ],
+    "stickers/*.ts": [
+      "tests/test_report.py"
     ]
   }
 }

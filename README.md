@@ -209,8 +209,11 @@ Removed 89 choice entries and 1,204 usage entries.
 ## Activity report
 
 `/switchboard:report` writes `~/.switchboard/report.html` and tells you its path. Open it in any browser
-(`open ~/.switchboard/report.html` on macOS). The page is one self-contained file: no scripts, nothing
-loaded from the network, readable only by you (mode 0600). It shows:
+(`open ~/.switchboard/report.html` on macOS). The page is one self-contained file: nothing loaded from
+the network, readable only by you (mode 0600). Its only script plays the animated stickers (from
+[fun-isometric](https://skills.klvn.dev/fun-isometric), MIT, vendored in `stickers/`); a Content-Security-Policy
+hash lets that script run and nothing else. Rebuild it after changing `stickers/` with
+`bun build stickers/report.ts --minify --format=iife --outfile switchboard/stickers.js`. It shows:
 
 - installed skills, how many are profiled, picks recorded, and how often you passed over the top suggestion
 - picks per week (up to the last 26 weeks)
