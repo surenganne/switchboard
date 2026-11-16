@@ -1,5 +1,5 @@
 ---
-description: Build a local HTML report of your Switchboard activity (picks over time, most-chosen skills, profiling coverage)
+description: Build a local HTML report of your Switchboard activity (picks, actual skill and agent usage, context cost by plugin, profiling coverage)
 ---
 Call the switchboard `report` tool. It writes `~/.switchboard/report.html` on this machine and returns its path,
 the number of installed skills and the number of picks recorded.

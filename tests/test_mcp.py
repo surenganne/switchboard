@@ -91,6 +91,14 @@ class McpTest(unittest.TestCase):
         self.assertFalse(r["overlap"])
         err, st = self.call("status")
         self.assertEqual((st["skills"], st["profiled"], st["pending"]), (4, 1, 3))
+        self.assertEqual((st["by_kind"], st["shadowed"]), ({"skill": 3, "command": 1}, []))
+        first, rest = self.call("pending_profiles", limit=2)[1], self.call("pending_profiles", limit=2, offset=2)[1]
+        self.assertEqual((len(first["pending"]), first["next_offset"], len(rest["pending"])), (2, 2, 1))
+        self.assertNotIn("next_offset", rest)  # last page
+        self.assertEqual({p["id"] for p in first["pending"] + rest["pending"]},
+                         {p["id"] for p in self.call("pending_profiles", limit=20)[1]["pending"]})
+        self.assertEqual((r["candidates"][0]["kind"], r["candidates"][0]["invoke"]),
+                         ("skill", {"tool": "Skill", "skill": "alpha"}))
         self.assertFalse(self.call("record_choice", task={"category": "code-review", "targets": ["pr"]},
                                    offered=["user:alpha"], chosen="user:alpha")[0])
         err, rep = self.call("report")

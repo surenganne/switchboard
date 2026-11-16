@@ -68,6 +68,42 @@ class ScanTest(unittest.TestCase):
         rec = {s["id"]: s for s in scan_claude.list_skills(self.ch, self.proj)}
         self.assertEqual(rec["user:zeta"]["kind"], "command")
 
+    def test_lists_user_project_and_plugin_agents(self):
+        agent = lambda n, d: f"---\nname: {n}\ndescription: {d}\ntools: Read\n---\nYou are {n}.\n"
+        write(self.ch / "agents/helper.md", agent("helper", "User agent"))
+        write(self.ch / "agents/nofm.md", "no frontmatter, so not an agent\n")
+        write(self.proj / ".claude/agents/local.md", agent("local", "Project agent"))
+        write(self.root / "plugins/plug/agents/reviewer-file.md", agent("reviewer", "Plugin agent"))
+        write(self.root / "plugins/off/agents/offagent.md", agent("offagent", "Disabled plugin agent"))
+        rec = {s["id"]: s for s in scan_claude.list_skills(self.ch, self.proj)}
+        agents = {sid for sid, r in rec.items() if r["kind"] == "agent"}
+        self.assertEqual(agents, {"user:helper", f"project:{self.phash}:local", "plug:reviewer"})  # name from frontmatter
+        self.assertEqual(rec["plug:reviewer"]["plugin_key"], "plug@mkt")
+        self.assertEqual(rec["plug:reviewer"]["content_hash"], hashlib.sha256(
+            (self.root / "plugins/plug/agents/reviewer-file.md").read_bytes()).hexdigest()[:16])
+
+    def test_agent_named_like_a_skill_is_reported_not_silently_dropped(self):
+        write(self.ch / "agents/alpha.md", "---\nname: alpha\ndescription: Agent alpha\n---\nx\n")
+        rec = {s["id"]: s for s in scan_claude.list_skills(self.ch, self.proj)}
+        self.assertEqual((rec["user:alpha"]["kind"], rec["user:alpha"]["shadows"]), ("skill", ["agent"]))
+        write(self.root / "plugins/plug/commands/beta.md", "---\ndescription: Shim for skill beta\n---\nx\n")
+        rec = {s["id"]: s for s in scan_claude.list_skills(self.ch, self.proj)}
+        self.assertNotIn("shadows", rec["plug:beta"])  # a command shim for its own skill is not reported
+
+    def test_plugin_mcp_servers(self):
+        plug = self.root / "plugins/plug"
+        write(plug / ".mcp.json", json.dumps({"mcpServers": {"chrome": {"command": "x"}}}))
+        write(plug / ".claude-plugin/plugin.json", json.dumps({"mcpServers": {"inline": {"command": "y"}}}))
+        write(self.root / "outside.json", json.dumps({"mcpServers": {"escaped": {}}}))
+        off = self.root / "plugins/off"  # disabled by the project settings: not listed
+        write(off / ".mcp.json", json.dumps({"mcpServers": {"offsrv": {}}}))
+        self.assertEqual(scan_claude.plugin_mcp(self.ch, self.proj), {"plug@mkt": ["chrome", "inline"]})
+        write(plug / ".claude-plugin/plugin.json", json.dumps({"mcpServers": ["./extra.json", "../../outside.json"]}))
+        write(plug / "extra.json", json.dumps({"mcpServers": {"fromfile": {}}}))
+        self.assertEqual(scan_claude.plugin_mcp(self.ch, self.proj), {"plug@mkt": ["chrome", "fromfile"]})
+        write(plug / ".mcp.json", "not json")  # a broken file is skipped, not fatal
+        self.assertEqual(scan_claude.plugin_mcp(self.ch, self.proj), {"plug@mkt": ["fromfile"]})
+
     def test_hygiene_fields(self):
         write(self.ch / "skills/long/SKILL.md", skill("long", "x" * 300))
         rec = {s["id"]: s for s in scan_claude.list_skills(self.ch, self.proj)}

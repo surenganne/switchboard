@@ -87,11 +87,21 @@ class ProfilesTest(unittest.TestCase):
 
     def test_pending_reports_new_and_changed(self):
         self.assertEqual(profiles.save(good(), INV), [])
-        self.assertEqual(profiles.pending(INV), [{"id": "plug:beta", "path": "/x/beta/SKILL.md", "reason": "new"}])
+        self.assertEqual(profiles.pending(INV), [{"id": "plug:beta", "kind": "skill", "path": "/x/beta/SKILL.md",
+                                                  "reason": "new"}])
         changed = json.loads(json.dumps(INV))
         changed["user:alpha"]["content_hash"] = "d" * 16
         got = {p["id"]: p["reason"] for p in profiles.pending(changed)}
         self.assertEqual(got, {"user:alpha": "changed", "plug:beta": "new"})
+
+    def test_agent_profile_must_be_multi_agent(self):
+        inv = {"plug:rev": {"id": "plug:rev", "source": "plug", "kind": "agent", "path": "/x/rev.md",
+                            "content_hash": "e" * 16}}
+        agent = good(id="plug:rev", source="plug", content_hash="e" * 16)
+        self.assertTrue(any(e.startswith("cost:") for e in profiles.validate(agent, inv)))
+        self.assertEqual(profiles.save(dict(agent, cost="multi-agent"), inv), [])
+        self.assertIn("plug:rev", profiles.load_all())  # reload re-validates without the inventory's kind
+        self.assertEqual(profiles.pending(inv), [])
 
     def test_load_all_skips_unreadable(self):
         profiles.save(good(), INV)

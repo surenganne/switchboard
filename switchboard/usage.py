@@ -33,15 +33,19 @@ def cached_inventory() -> dict:
     return skills if isinstance(skills, dict) else {}
 
 
-def resolve_ids(names) -> list:
+def of_kind(inv: dict, kinds) -> dict:
+    return inv if kinds is None else {k: v for k, v in inv.items() if v.get("kind") in kinds}
+
+
+def resolve_ids(names, kinds=None) -> list:
     """Installed ids for the names, from the cached inventory; a live scan only for names it misses (the shared
-    inventory.json may belong to another project's session)."""
+    inventory.json may belong to another project's session). `kinds` keeps a Skill call from matching an agent."""
     from switchboard import scan_claude
     names = [n for n in names if isinstance(n, str) and n]
-    inv = cached_inventory()
+    inv = of_kind(cached_inventory(), kinds)
     ids = [resolve(n, inv) for n in names]
     if None in ids:
-        live = scan_claude.current()
+        live = of_kind(scan_claude.current(), kinds)
         ids = [i or resolve(n, live) for n, i in zip(names, ids)]
     return [i for i in ids if i]
 

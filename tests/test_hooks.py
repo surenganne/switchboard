@@ -82,15 +82,15 @@ class HooksTest(unittest.TestCase):
         msg = out["additionalContext"]
         self.assertIn("code-review", msg)
         self.assertIn("route", msg)
-        self.assertIn("2 skills are new or changed since profiling", msg)
+        self.assertIn("2 skills or agents are new or changed since profiling", msg)
 
     def test_session_offers_profiling_only_when_pending_set_changes(self):
         ch, proj = build_fixture(self.root)
         self.env.update(SWITCHBOARD_CLAUDE_HOME=str(ch), CLAUDE_PROJECT_DIR=str(proj))
-        self.assertIn("4 skills are new or changed since profiling", self.session())
+        self.assertIn("4 skills or agents are new or changed since profiling", self.session())
         self.assertEqual(self.session(), "")  # same pending set: say nothing again
         write(ch / "skills/epsilon/SKILL.md", skill("epsilon", "New skill"))
-        self.assertIn("5 skills are new or changed since profiling", self.session())
+        self.assertIn("5 skills or agents are new or changed since profiling", self.session())
 
     def test_profiling_offer_is_remembered_per_project(self):
         ch, proj = build_fixture(self.root)
@@ -244,6 +244,24 @@ class HooksTest(unittest.TestCase):
     def test_hooks_json_matches_record_choice(self):
         hooks = json.loads((Path(__file__).parent.parent / "hooks/hooks.json").read_text())
         self.assertIn(ROUTE_TOOL.replace("__route", "__record_choice"), hooks["hooks"]["PreToolUse"][0]["matcher"])
+
+    def test_pretool_logs_agent_calls_and_never_blocks_them(self):
+        from switchboard import profiles, scan_claude
+        self.seed_review_profiles()
+        write(self.root / "p/ecc/agents/code-reviewer.md", "---\nname: code-reviewer\ndescription: Reviews code\n---\nx\n")
+        inv = {s["id"]: s for s in scan_claude.list_skills(self.root / "rc", None)}
+        p = dict(FIX["profiles"]["ecc:code-review"], id="ecc:code-reviewer", cost="multi-agent",
+                 content_hash=inv["ecc:code-reviewer"]["content_hash"])
+        self.assertEqual(profiles.save(p, inv), [])  # an overlapping code-review agent
+        for _ in range(3):  # a skill's workflow may start the same agent repeatedly: never denied
+            self.assertIsNone(self.pretool("Agent", {"subagent_type": "ecc:code-reviewer", "prompt": "x"}))
+        self.assertIsNone(self.pretool("Task", {"subagent_type": "ecc:code-reviewer"}))  # older tool name
+        self.pretool("Agent", {"subagent_type": "general-purpose"})  # built-in agent: not installed, not logged
+        self.pretool("Skill", {"skill": "ecc:code-reviewer"})  # a Skill call never resolves to an agent
+        self.assertEqual(self.usage_ids(), ["ecc:code-reviewer"] * 4)
+        self.assertTrue(self.deny(self.pretool("Skill", {"skill": "ecc:code-review"})))  # skills still routed
+        hooks = json.loads((ROOT / "hooks/hooks.json").read_text())
+        self.assertTrue({"Agent", "Task", "Skill"} <= set(hooks["hooks"]["PreToolUse"][0]["matcher"].split("|")))
 
     def test_pretool_allows_non_overlap_skill(self):
         self.seed_review_profiles()

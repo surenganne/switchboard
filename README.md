@@ -51,9 +51,9 @@ some are waiting.
 
 | Step | Who | What happens |
 |---|---|---|
-| **1 · Scan** | Switchboard | At session start, a hook lists your user, project and enabled-plugin skills and commands, and fingerprints each one (its main file plus every `.md` in its folder). |
+| **1 · Scan** | Switchboard | At session start, a hook lists your user, project and enabled-plugin skills, commands and agents (subagents), and fingerprints each one (a skill's main file plus every `.md` in its folder; a command's or agent's own file). |
 | **2 · Profile** | Claude | `/switchboard:profile` has Claude fill a fixed schema per skill. A validator accepts only known fields, values from fixed lists and short text, so a skill's own text cannot steer the router. |
-| **3 · Route** | Claude + Switchboard | Before Claude uses a skill in a task area where several profiled skills overlap, it describes the task (category, role, targets, focus, stack) to the local `route` tool. Skills whose role matches the task (`performs` by default; `assists` for help around a task, such as answering review comments) rank first, then by how much of the task each covers. `route` returns up to 10 candidates and tells Claude to offer the best 2–3 with AskUserQuestion. If Claude skips routing or asking, a hook blocks the skill until a choice is recorded (at most twice per 10 minutes, so it never gets stuck). When your prompt looks like work in an overlapping area (review, debugging, tests, new features, refactors, release…), a prompt hook also reminds Claude to route even if it was about to do the work without a skill; the prompt is matched in memory and never stored. |
+| **3 · Route** | Claude + Switchboard | Before Claude uses a skill in a task area where several profiled skills overlap, it describes the task (category, role, targets, focus, stack) to the local `route` tool. Skills whose role matches the task (`performs` by default; `assists` for help around a task, such as answering review comments) rank first, then by how much of the task each covers. `route` returns up to 10 candidates, each with its kind and how to start it (the Skill tool, or the Agent tool for an agent), and tells Claude to offer the best 2–3 with AskUserQuestion. If Claude skips routing or asking, a hook blocks the skill until a choice is recorded (at most twice per 10 minutes, so it never gets stuck). Agent calls are never blocked, since skills start agents mid-workflow; they are only logged for hygiene. When your prompt looks like work in an overlapping area (review, debugging, tests, new features, refactors, release…), a prompt hook also reminds Claude to route even if it was about to do the work without a skill; the prompt is matched in memory and never stored. |
 | **4 · Pick** | You | Claude shows the top two or three with a one-line reason each, and you choose. |
 | **5 · Learn** | Switchboard | Your pick is logged locally, shown as a label on similar tasks later, and feeds `/switchboard:audit` and the activity report. |
 
@@ -82,10 +82,10 @@ in its own way. The data formats are exact.
 
 ### At session start
 
-When skills are new or changed since they were last profiled:
+When skills or agents are new or changed since they were last profiled:
 
 ```
-Switchboard: 12 skills are new or changed since they were profiled.
+Switchboard: 12 skills or agents are new or changed since they were profiled.
 Run /switchboard:profile to update them.
 ```
 
@@ -148,7 +148,7 @@ never your prompt:
 ### `/switchboard:status`
 
 ```
-Switchboard knows 86 skills: 86 profiled, 0 waiting.
+Switchboard knows 160 entries (86 skills, 4 commands, 70 agents): 160 profiled, 0 waiting.
 Task areas with overlapping skills: code-review, debugging, docs, planning, testing, ui-design.
 ```
 
@@ -172,7 +172,7 @@ Open it with: open ~/.switchboard/report.html
 
 ### `/switchboard:hygiene`
 
-From v0.4 Switchboard logs which skills you use (skill id and date only). Until the log covers the window
+From v0.4 Switchboard logs which skills you use (skill id and date only), and from v0.6 which agents you start. Until the log covers the window
 (30 days by default), you see:
 
 ```
@@ -182,18 +182,18 @@ From v0.4 Switchboard logs which skills you use (skill id and date only). Until 
 After that, plugins with no skill used in the window, and your own user or project skills you never used:
 
 ```
-| Turn off            | Skills | ≈ Tokens |
-|---------------------|--------|----------|
-| ecc@ecc (plugin)    | 412    | 21,300   |
-| user:old-helper     | 1      | 48       |
+| Turn off            | Skills | ≈ Tokens | MCP servers     |
+|---------------------|--------|----------|-----------------|
+| ecc@ecc (plugin)    | 412    | 21,300   | chrome-devtools |
+| user:old-helper     | 1      | 48       | —               |
 
 Mostly unused (info): gstack@gstack, used 2 of 60 (review, ship); turning it off would save ≈ 3,900.
-Skill list today ≈ 28,700 tokens; after these suggestions ≈ 7,350 (estimate; skills and commands only).
+Skill list today ≈ 28,700 tokens; after these suggestions ≈ 7,350 (estimate; skills, commands and agents only).
 ```
 
 Skills first seen inside the window are never suggested. Switchboard does not turn anything off: use
 `/plugin`, or ask Claude. Plugin skills can only be turned off with their whole plugin, and turning a plugin off
-also removes its MCP tools, agents and hooks, which hygiene does not track. Check a plugin is not kept for those
+also removes its MCP servers (listed, but their use is not tracked) and hooks (not tracked). Check a plugin is not kept for those
 before you disable it. Turning `record_usage` off clears the first-seen dates, so the window restarts when you
 turn it back on.
 
@@ -216,14 +216,22 @@ the network, readable only by you (mode 0600). Its only script plays the animate
 hash lets that script run and nothing else. Rebuild it after changing `stickers/` with
 `bun build stickers/report.ts --minify --format=iife --outfile switchboard/stickers.js`. It shows:
 
-- installed skills, how many are profiled, picks recorded, and how often you passed over the top suggestion
+- whether profiling is up to date: how many entries have no profile yet (by kind) or changed since they were
+  profiled, with a prompt to run `/switchboard:profile`
+- installed skills, commands and agents, how many are profiled, picks recorded, how often you passed over the
+  top suggestion, runs in the last 30 days, and the estimated context tokens everything installed takes
 - picks per week (up to the last 26 weeks)
 - the most chosen skills, as times chosen out of times offered
 - picks and overrides by task area
 - task types where you keep passing over the top pick, with the skills you chose instead
-- profiling coverage by source, and how many profiles are out of date
-- every profiled skill with its categories, a one-line description and times chosen / offered, most
-  chosen first (collapsed by default; search it with your browser's Find)
+- actual usage from the usage log: runs per week, the most-run skills and agents, and how many routed picks
+  were then run the same day or the next
+- agents vs skills: in picks where both were offered, which kind you chose, per task area
+- context cost by plugin: skills, commands and agents per plugin, their estimated listing tokens, how many were
+  used in the last 30 days, and the plugin's MCP servers
+- profiling coverage by kind and by source, and how many profiles are out of date
+- every profiled skill or agent with its kind, categories, a one-line description and times chosen / offered,
+  most chosen first (collapsed by default; search it with your browser's Find)
 
 Two of its views, drawn here from illustrative mock data:
 
@@ -232,7 +240,8 @@ Two of its views, drawn here from illustrative mock data:
 ![Picks by task area, illustrative data: code review leads with 30 picks; each bar shows the share where another skill was chosen](docs/images/picks-by-area.svg)
 
 It follows your system's light or dark setting. Run the command again whenever you want fresh numbers;
-the activity sections stay empty until you have picked a skill from a Switchboard suggestion.
+the pick sections stay empty until you have picked a skill from a Switchboard suggestion, and the usage
+sections until Claude has run a skill or agent with usage logging on.
 
 ## Privacy
 
@@ -253,16 +262,19 @@ No prompt text and no code are stored. Feature fields keep only values from the 
 recording, create `~/.switchboard/settings.json` with `{"record_choices": false}` and/or
 `{"record_usage": false}`. Past session transcripts are never read.
 
-## Limits in v0.4
+## Limits in v0.6
 
 - Claude Code only. The scanner sits behind a small interface (`list_skills`) so other platforms can follow.
 - Built-in Claude Code skills (such as `code-review` and `simplify`) have no files on disk, so they are not
   routed.
-- Skills and plugin commands only; MCP tools and subagents are not routed.
+- Skills, commands and agents only; MCP tools and hooks are not routed. Built-in agents (such as
+  `general-purpose` and `Explore`) have no files on disk, so they are not routed either.
+- An agent named like a skill or command from the same source is left out of the inventory (the skill or
+  command keeps the id); `/switchboard:status` lists these under `shadowed`.
 - Fingerprints cover a skill's `.md` files only, so an update that changes only its scripts does not mark it
   for re-profiling.
 - Hygiene suggests whole plugins, not single plugin skills. Its token figures are estimates (about 4
-  characters per token) and leave out agents, MCP tools and hooks.
+  characters per token) and leave out MCP tools and hooks.
 
 ## Update
 

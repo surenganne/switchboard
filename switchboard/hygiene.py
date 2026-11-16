@@ -4,12 +4,14 @@ Pure: takes the inventory, usage rows and first-seen dates, returns suggestions.
 """
 from __future__ import annotations
 
+import json
 import math
 from collections import defaultdict
 from datetime import date, timedelta
 
 DEFAULT_DAYS, MIN_DAYS, MAX_DAYS = 30, 7, 365
 MOSTLY_UNUSED = 0.2  # a plugin where at most 1 in 5 skills was used
+MAX_BYTES = 3800  # same cap as route.MAX_BYTES
 
 
 def tokens(rec: dict) -> int:
@@ -34,7 +36,10 @@ def _date(s):
         return None
 
 
-def suggest(inv: dict, rows: list, seen: dict, today: str, days=DEFAULT_DAYS, recording: bool = True) -> dict:
+def suggest(inv: dict, rows: list, seen: dict, today: str, days=DEFAULT_DAYS, recording: bool = True,
+            mcp: dict | None = None) -> dict:
+    """`mcp` {plugin key: MCP server names}: listed on each plugin entry, since turning it off drops them too."""
+    mcp = mcp or {}
     if not recording:
         return {"recording": False}
     days, now = _days(days), date.fromisoformat(today)
@@ -55,18 +60,34 @@ def suggest(inv: dict, rows: list, seen: dict, today: str, days=DEFAULT_DAYS, re
         if rec.get("plugin_key"):
             groups[rec["plugin_key"]].append(sid)
         elif sid not in used and old(sid):
-            skills.append({"id": sid, "path": rec.get("path"), "tokens": tokens(rec)})
+            skills.append({"id": sid, "kind": rec.get("kind", "skill"), "path": rec.get("path"), "tokens": tokens(rec)})
     for key, members in groups.items():
         cost = sum(tokens(inv[sid]) for sid in members)
         hit = sorted(sid for sid in members if sid in used)
         if not hit and min(seen.get(sid, today) for sid in members) <= start:
-            plugins.append({"plugin_key": key, "skills": len(members), "tokens": cost})
+            plugins.append({"plugin_key": key, "skills": len(members), "tokens": cost, "mcp_servers": mcp.get(key, [])})
         elif hit and len(hit) / len(members) <= MOSTLY_UNUSED:
-            mostly.append({"plugin_key": key, "used": hit, "skills": len(members), "tokens": cost})
+            mostly.append({"plugin_key": key, "used": hit, "skills": len(members), "tokens": cost,
+                           "mcp_servers": mcp.get(key, [])})
 
     by_cost = lambda x: -x["tokens"]
     now_total = sum(tokens(r) for r in inv.values())
-    return {"collecting": False, "window_days": days,
-            "plugins": sorted(plugins, key=by_cost), "mostly_unused": sorted(mostly, key=by_cost),
-            "skills": sorted(skills, key=by_cost), "tokens_now": now_total,
-            "tokens_after": now_total - sum(p["tokens"] for p in plugins) - sum(s["tokens"] for s in skills)}
+    out = {"collecting": False, "window_days": days,
+           "plugins": sorted(plugins, key=by_cost), "mostly_unused": sorted(mostly, key=by_cost),
+           "skills": sorted(skills, key=by_cost), "tokens_now": now_total,
+           "tokens_after": now_total - sum(p["tokens"] for p in plugins) - sum(s["tokens"] for s in skills)}
+    return fit(out)
+
+
+def fit(out: dict) -> dict:
+    """Drop the smallest suggestions until the result fits MAX_BYTES (context-mode replaces MCP results over
+    4096 bytes); `omitted` counts them. The token totals still cover every suggestion."""
+    omitted = {}
+    while len(json.dumps(out)) > MAX_BYTES:
+        key = next((k for k in ("skills", "mostly_unused", "plugins") if out[k]), None)
+        if key is None:
+            break
+        out[key].pop()
+        omitted[key] = omitted.get(key, 0) + 1
+        out["omitted"] = omitted
+    return out

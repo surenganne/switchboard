@@ -7,11 +7,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from collections import Counter  # noqa: E402
 from datetime import date  # noqa: E402
 
 from switchboard import choices, hygiene, profiles, report, route, scan_claude, usage  # noqa: E402
 
-VERSION = "0.5.4"
+VERSION = "0.6.0"
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")  # newest first; the subset this server speaks
 OBJ = {"type": "object"}
 STRS = {"type": "array", "items": {"type": "string"}}
@@ -27,21 +28,34 @@ TASK = {"type": "object", "description": "Structured task: category (required), 
         "required": ["category"]}
 
 
+PAGE = {"limit": {"type": "integer", "minimum": 1, "maximum": 1000}, "offset": {"type": "integer", "minimum": 0}}
+
+
+def page(items: list, args: dict, default: int) -> dict:
+    """One page of `items`, with `next_offset` while more remain (pages keep each result small)."""
+    limit = max(1, min(int(args.get("limit") or default), 1000))
+    start = max(0, int(args.get("offset") or 0))
+    out = {"total": len(items), "pending": items[start:start + limit]}
+    if start + limit < len(items):
+        out["next_offset"] = start + limit
+    return out
+
+
 def schema(props=None, required=()):
     return {"type": "object", "properties": props or {}, "required": list(required)}
 
 
 TOOLS = [
-    {"name": "route", "description": "Rank installed skills that fit a task. Returns up to 10 candidates with profiles and past choices (tie-break only), and a `next` step.",
+    {"name": "route", "description": "Rank installed skills, commands and agents that fit a task. Returns up to 10 candidates (fewer when needed to keep the result small) with kind, how to invoke each, what each does, best_for/not_for and past choices (tie-break only), and a `next` step.",
      "inputSchema": schema({"task": TASK}, ["task"])},
     {"name": "record_choice", "description": "Record which skill the user picked (task features and ids only).",
      "inputSchema": schema({"task": TASK, "offered": STRS, "chosen": {"type": "string"}}, ["task", "offered", "chosen"])},
-    {"name": "pending_profiles", "description": "Skills with no profile or a stale one, with paths to read.",
-     "inputSchema": schema({"limit": {"type": "integer", "minimum": 1, "maximum": 1000}})},
+    {"name": "pending_profiles", "description": "Skills, commands and agents with no profile or a stale one, with paths to read. Pages: pass `offset` (from `next_offset`) for the next page.",
+     "inputSchema": schema(PAGE)},
     {"name": "save_profile", "description": "Validate and save one skill profile.",
      "inputSchema": schema({"profile": OBJ}, ["profile"])},
-    {"name": "pending_roles", "description": "Profiled skills with no role yet, with name and description to judge it.",
-     "inputSchema": schema({"limit": {"type": "integer", "minimum": 1, "maximum": 1000}})},
+    {"name": "pending_roles", "description": "Profiled skills with no role yet, with name and description to judge it. Pages: pass `offset` (from `next_offset`) for the next page.",
+     "inputSchema": schema(PAGE)},
     {"name": "set_role", "description": "Set only the role of a current profile.",
      "inputSchema": schema({"id": {"type": "string"}, "content_hash": {"type": "string"},
                             "role": {"type": "string", "enum": list(profiles.ROLES)}}, ["id", "content_hash", "role"])},
@@ -61,7 +75,7 @@ inventory = scan_claude.current
 
 def hygiene_report(days=hygiene.DEFAULT_DAYS):
     return hygiene.suggest(inventory(), usage.rows(), usage.first_seen(), date.today().isoformat(), days,
-                           usage.recording_on())
+                           usage.recording_on(), scan_claude.current_mcp())
 
 
 def hygiene_status(h: dict):
@@ -88,25 +102,25 @@ def call_tool(name: str, args: dict):
         return {"recorded": True, "chosen": chosen}
     if name == "pending_profiles":
         inv = inventory()
-        pend = profiles.pending(inv)
-        limit = max(1, min(int(args.get("limit") or 20), 1000))
-        items = [dict(p, source=inv[p["id"]]["source"], content_hash=inv[p["id"]]["content_hash"]) for p in pend[:limit]]
-        return {"total": len(pend), "pending": items}
+        pend = [dict(p, source=inv[p["id"]]["source"], content_hash=inv[p["id"]]["content_hash"])
+                for p in profiles.pending(inv)]
+        return page(pend, args, 15)
     if name == "save_profile":
         errs = profiles.save(args.get("profile"), inventory())
         return {"saved": not errs, "errors": errs}
     if name == "pending_roles":
         inv = inventory()
-        pend = profiles.pending_roles(inv)
-        limit = max(1, min(int(args.get("limit") or 100), 1000))
-        return {"total": len(pend), "pending": [dict(p, name=inv[p["id"]].get("name"), description=inv[p["id"]].get("description"))
-                                                for p in pend[:limit]]}
+        pend = [dict(p, name=inv[p["id"]].get("name"), description=inv[p["id"]].get("description"))
+                for p in profiles.pending_roles(inv)]
+        return page(pend, args, 10)
     if name == "set_role":
         errs = profiles.set_role(args.get("id"), args.get("content_hash"), args.get("role"), inventory())
         return {"saved": not errs, "errors": errs}
     if name == "status":
         inv, profs = inventory(), profiles.load_all()
-        return {"skills": len(inv), "profiled": sum(1 for s in profs if s in inv),
+        return {"skills": len(inv), "by_kind": dict(Counter(r.get("kind", "skill") for r in inv.values())),
+                "shadowed": sorted(sid for sid, r in inv.items() if r.get("shadows")),
+                "profiled": sum(1 for s in profs if s in inv),
                 "missing_role": len(profiles.pending_roles(inv)),
                 "pending": len(profiles.pending(inv)), "overlap_categories": route.overlap_categories(profs, inv),
                 "hygiene": hygiene_status(hygiene_report())}
@@ -120,7 +134,7 @@ def call_tool(name: str, args: dict):
         return {"removed": choices.forget(), "usage_removed": usage.forget()}
     if name == "report":
         inv, profs = inventory(), profiles.load_all()
-        path = report.write(inv, profs)
+        path = report.write(inv, profs, scan_claude.current_mcp())
         return {"path": str(path), "skills": len(inv), "picks": report.summarise(inv, profs, choices.rows())["picks"]}
     raise LookupError(f"unknown tool: {name}")
 

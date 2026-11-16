@@ -9,7 +9,7 @@ try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from switchboard import paths, profiles, route, scan_claude, usage
 
-    ROUTE = ("Before using a skill in one of them, call the switchboard `route` tool with a structured description "
+    ROUTE = ("Before using a skill or agent in one of them, call the switchboard `route` tool with a structured description "
              "of the task (role `assists` when the user wants help around a task, such as answering review comments), then offer the top 2–3 to the user with AskUserQuestion (one option per skill, the reason "
              "in its description, a past choice as a label) and call `record_choice` after they pick. If only one "
              "fits clearly, use it and say which.")
@@ -17,9 +17,9 @@ try:
     def message(overlap, n_pending):
         parts = []
         if overlap:
-            parts.append(f"Switchboard: these task areas have several installed skills: {', '.join(overlap)}. {ROUTE}")
+            parts.append(f"Switchboard: these task areas have several installed skills or agents: {', '.join(overlap)}. {ROUTE}")
         if n_pending:
-            parts.append(f"{'' if overlap else 'Switchboard: '}{n_pending} skills are new or changed since profiling; "
+            parts.append(f"{'' if overlap else 'Switchboard: '}{n_pending} skills or agents are new or changed since profiling; "
                          "offer /switchboard:profile.")
         return " ".join(parts)
 

@@ -64,6 +64,8 @@ def validate(p: dict, inventory: dict) -> list[str]:
         errs.append(f"depth: one of {', '.join(DEPTHS)}")
     if p.get("cost") not in COSTS:
         errs.append(f"cost: one of {', '.join(COSTS)}")
+    elif rec is not None and rec.get("kind") == "agent" and p["cost"] != "multi-agent":
+        errs.append("cost: an agent always runs as a subagent, so its cost is multi-agent")
     st = p.get("stack")
     if not isinstance(st, list) or not 1 <= len(st) <= 8 or any(
             not isinstance(x, str) or len(x) > 30 or not STACK_RE.match(x) for x in st):
@@ -126,5 +128,6 @@ def pending(inventory: dict) -> list[dict]:
         rec = inventory[sid]
         prof = have.get(sid)
         if prof is None or prof.get("content_hash") != rec.get("content_hash"):
-            out.append({"id": sid, "path": rec.get("path"), "reason": "new" if prof is None else "changed"})
+            out.append({"id": sid, "kind": rec.get("kind", "skill"), "path": rec.get("path"),
+                        "reason": "new" if prof is None else "changed"})
     return out

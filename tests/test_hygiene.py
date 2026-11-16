@@ -59,6 +59,25 @@ class HygieneTest(unittest.TestCase):
         self.assertEqual((q["plugin_key"], q["used"], q["skills"]), ("q@m", ["q:s1"], 6))
         self.assertEqual(q["tokens"], sum(hygiene.tokens(r) for sid, r in build()[0].items() if sid.startswith("q:")))
 
+    def test_plugin_entries_list_their_mcp_servers(self):
+        out = hygiene.suggest(*build(), TODAY, mcp={"p@m": ["chrome"], "other@m": ["x"]})
+        self.assertEqual(out["plugins"][0]["mcp_servers"], ["chrome"])
+        self.assertEqual(out["mostly_unused"][0]["mcp_servers"], [])
+        self.assertEqual(hygiene.suggest(*build(), TODAY)["plugins"][0]["mcp_servers"], [])  # no lookup: empty
+
+    def test_result_fits_under_context_tool_cutoff(self):
+        import json
+        inv, rows, seen = build()
+        for n in range(200):  # many unused user skills
+            inv[f"user:old{n:03d}"] = rec(f"user:old{n:03d}", desc_chars=40 + n)
+            seen[f"user:old{n:03d}"] = "2026-11-01"
+        out = hygiene.suggest(inv, rows, seen, TODAY)
+        self.assertLessEqual(len(json.dumps(out)), hygiene.MAX_BYTES)
+        self.assertEqual(out["omitted"]["skills"] + len(out["skills"]), 201)  # 200 + user:a
+        self.assertEqual(out["skills"][0]["tokens"], hygiene.tokens(inv["user:old199"]))  # biggest saving kept first
+        self.assertEqual(out["plugins"][0]["plugin_key"], "p@m")  # plugins kept while skills can be trimmed
+        self.assertNotIn("omitted", hygiene.suggest(*build(), TODAY))
+
     def test_window_edge(self):
         inv, rows, seen = build()
         out = hygiene.suggest(inv, rows + [{"date": "2026-11-20", "id": "user:a"}], seen, TODAY)

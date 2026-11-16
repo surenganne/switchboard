@@ -1,20 +1,32 @@
-"""Score profiled skills against Claude's structured description of a task.
+"""Score profiled skills, commands and agents against Claude's structured description of a task.
 
 Past choices only break ties between equal scores; they never lift a weaker fit above a better one.
 """
 from __future__ import annotations
 
+import json
 from collections import Counter
 
 ROLES = ("performs", "assists", "meta")  # kept equal to profiles.ROLES (tests/test_route checks it)
 
 W_TARGET, W_FOCUS, W_STACK, W_DEPTH, W_COST = 3, 2, 1, 1, 1
 LIMIT = 10  # a coarse shortlist: Claude picks the 2–3 to offer by best_for / not_for
+# result size cap (context-mode replaces MCP results over 4096 bytes); two candidates are the least a choice needs
+MAX_BYTES, MIN_KEEP = 3800, 2
+PICK_FIELDS = ("does", "best_for", "not_for", "role", "cost")  # what Claude needs to choose; the rest stays local
 FULL_TAGS = 3  # a field with more tags than this is discounted
 COST_RANK = {"single-pass": 0, "multi-agent": 1, "workflow": 2}  # tie-break: the lighter skill first
 NEXT = ("Pick the 2–3 candidates whose best_for/not_for fit this task best and ask the user with AskUserQuestion "
-        "(one option per skill, reason in its description, a past choice as a label), then call record_choice. "
-        "If only one fits clearly, call record_choice with it and say which.")
+        "(one option per candidate, reason in its description, a past choice as a label), then call record_choice. "
+        "If only one fits clearly, call record_choice with it and say which. Run the pick with its `invoke` "
+        "(an agent starts with the Agent tool, not the Skill tool).")
+
+
+def invoke(rec: dict) -> dict:
+    """How Claude starts this entry: user and project entries go by bare name, plugin ones as plugin:name."""
+    src, name = rec.get("source", ""), rec.get("name", "")
+    ref = name if src == "user" or src.startswith("project:") else f"{src}:{name}"
+    return {"tool": "Agent", "subagent_type": ref} if rec.get("kind") == "agent" else {"tool": "Skill", "skill": ref}
 
 
 def _list(v):
@@ -67,12 +79,20 @@ def route(task: dict, profiles: dict, inventory: dict, past: list[dict]) -> dict
     scored.sort(key=lambda x: (x[0], -x[1], -x[4], x[2], -x[3], x[5]))
     cands = []
     for _, s, *_, sid in scored[:LIMIT]:
-        p = profiles[sid]
-        cands.append({"id": sid, "score": s, "stale": p.get("content_hash") != inventory[sid].get("content_hash"),
-                      "profile": p,
-                      "past_choices": [r.get("date") for r in past if r.get("chosen") == sid]})
+        rec, p = inventory[sid], profiles[sid]
+        c = {"id": sid, "kind": rec.get("kind", "skill"), "invoke": invoke(rec), "score": s,
+             **{k: p[k] for k in PICK_FIELDS if p.get(k)}}
+        if p.get("content_hash") != rec.get("content_hash"):
+            c["stale"] = True
+        if picked[sid]:
+            c["past_choices"] = picked[sid]  # times picked for similar tasks
+        cands.append(c)
     overlap = len(cands) >= 2
-    return {"candidates": cands, "overlap": overlap, **({"next": NEXT} if overlap else {})}
+    out = {"candidates": cands, "overlap": overlap, **({"next": NEXT} if overlap else {})}
+    # context tools (such as context-mode) swap larger MCP results for a search stub Claude cannot read
+    while len(json.dumps(out)) > MAX_BYTES and len(cands) > MIN_KEEP:
+        cands.pop()
+    return out
 
 
 def overlap_categories(profiles: dict, inventory: dict) -> list[str]:

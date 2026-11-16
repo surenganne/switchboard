@@ -13,7 +13,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Skill|mcp__plugin_switchboard_switchboard__route|mcp__plugin_switchboard_switchboard__record_choice",
+        "matcher": "Skill|Agent|Task|mcp__plugin_switchboard_switchboard__route|mcp__plugin_switchboard_switchboard__record_choice",
         "hooks": [{"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/switchboard/hook_pretool.py\"", "timeout": 10}]
       }
     ]

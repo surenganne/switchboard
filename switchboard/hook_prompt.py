@@ -32,7 +32,7 @@ AREAS = {
     "data": r"\bsql\b|database|etl|migration|dataset|warehouse",
 }
 AREA_RE = {a: re.compile(rf"\b(?:{w})", re.I) for a, w in AREAS.items()}
-REMIND = ("Switchboard: this looks like {areas} work, where several installed skills overlap. Before doing it "
+REMIND = ("Switchboard: this looks like {areas} work, where several installed skills or agents overlap. Before doing it "
           "yourself or calling a skill, call the switchboard route tool, offer the user the top 2–3 with "
           "AskUserQuestion and call record_choice. Skip this only if the user named a skill or said not to use "
           "one; describing the task does not count.")

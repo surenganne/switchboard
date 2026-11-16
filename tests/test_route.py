@@ -44,6 +44,16 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(empty["candidates"], [])
         self.assertNotIn("next", empty)
 
+    def test_candidates_say_how_to_invoke_them(self):
+        inv = copy.deepcopy(FIX["inventory"])
+        inv["ecc:review-pr"].update(kind="agent", name="review-pr")  # pretend this one is a plugin agent
+        got = {c["id"]: (c["kind"], c["invoke"]) for c in run({"targets": ["pr"]}, inv)["candidates"]}
+        self.assertEqual(got["ecc:review-pr"], ("agent", {"tool": "Agent", "subagent_type": "ecc:review-pr"}))
+        self.assertEqual(got["user:review"], ("skill", {"tool": "Skill", "skill": "review"}))
+        self.assertEqual(got["ecc:code-review"][1], {"tool": "Skill", "skill": "ecc:code-review"})
+        self.assertEqual(route.invoke({"source": "project:ab12cd34", "name": "x", "kind": "agent"}),
+                         {"tool": "Agent", "subagent_type": "x"})
+
     def test_skill_for_another_language_ranks_below_any_stack(self):
         profs = copy.deepcopy(FIX["profiles"])
         profs["ecc:orch-review"].update(stack=["kotlin"], focus=["correctness", "security"], depth="thorough")
@@ -121,7 +131,7 @@ class RouteTest(unittest.TestCase):
         inv["user:review"]["content_hash"] = "changed"
         c = {c["id"]: c for c in run({"targets": ["pr"], "focus": ["merge-readiness"]}, inv)["candidates"]}
         self.assertTrue(c["user:review"]["stale"])
-        self.assertFalse(c["ecc:review-pr"]["stale"])
+        self.assertNotIn("stale", c["ecc:review-pr"])  # only set when true, to keep the result small
 
     def test_past_choices_do_not_change_order(self):
         task = {"targets": ["local-diff"], "focus": ["security"]}
@@ -131,8 +141,24 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(ids(a), ids(b))
         self.assertEqual([c["score"] for c in a["candidates"]], [c["score"] for c in b["candidates"]])
         cb = {c["id"]: c for c in b["candidates"]}
-        self.assertEqual(cb["builtin:code-review"]["past_choices"], ["2026-11-01", "2026-11-02"])
-        self.assertEqual(cb["ecc:code-review"]["past_choices"], [])
+        self.assertEqual(cb["builtin:code-review"]["past_choices"], 2)  # times picked for similar tasks
+        self.assertNotIn("past_choices", cb["ecc:code-review"])
+
+    def test_result_fits_under_context_tool_cutoff(self):
+        profs = copy.deepcopy(FIX["profiles"])
+        inv = copy.deepcopy(FIX["inventory"])
+        for n in range(20):  # many overlapping, wordy profiles
+            sid = f"bulk:r{n}"
+            inv[sid] = dict(inv["user:review"], id=sid, source="bulk", name=f"r{n}")
+            profs[sid] = dict(profs["user:review"], id=sid, source="bulk", does="d" * 200,
+                              best_for=["b" * 80] * 5, not_for=["n" * 80] * 5)
+        r = route.route({"category": "code-review", "targets": ["pr"]}, profs, inv, [])
+        self.assertLessEqual(len(json.dumps(r)), route.MAX_BYTES)
+        self.assertGreaterEqual(len(r["candidates"]), route.MIN_KEEP)
+        for c in r["candidates"]:
+            self.assertLessEqual(set(c), {"id", "kind", "invoke", "score", "does", "best_for", "not_for", "role", "cost",
+                                          "stale", "past_choices"})
+        self.assertNotIn("content_hash", json.dumps(r))  # the rest of the profile stays local
 
     def test_overlap_categories(self):
         self.assertEqual(route.overlap_categories(FIX["profiles"], FIX["inventory"]), ["code-review"])

@@ -1,4 +1,4 @@
-"""Claude Code scanner: user, project and enabled-plugin skills and commands.
+"""Claude Code scanner: user, project and enabled-plugin skills, commands and agents (subagents).
 
 Other platforms get their own scanner module exposing the same list_skills shape.
 """
@@ -89,6 +89,52 @@ def _hash(path: Path, kind: str, data: bytes) -> str:
     return h.hexdigest()[:16]
 
 
+def enabled_plugins(claude_home: Path, project_dir: Path | None) -> list[tuple[str, Path]]:
+    """(settings key, install root) of each enabled, installed plugin, sorted by key."""
+    settings = [claude_home / "settings.json"]
+    if project_dir is not None:
+        settings += [project_dir / ".claude/settings.json", project_dir / ".claude/settings.local.json"]
+    enabled: dict = {}
+    for s in settings:  # later file wins
+        ep = _json(s).get("enabledPlugins")
+        if isinstance(ep, dict):
+            enabled.update(ep)
+    installed = _json(claude_home / "plugins/installed_plugins.json").get("plugins") or {}
+    out = []
+    for key in sorted(k for k, v in enabled.items() if v):
+        root = install_root(installed.get(key) if isinstance(installed, dict) else None, project_dir)
+        if root is not None:
+            out.append((key, root))
+    return out
+
+
+def mcp_servers(root: Path) -> list[str]:
+    """Names of the MCP servers a plugin starts: its .mcp.json plus plugin.json's mcpServers (inline, or paths
+    to files of the same shape as .mcp.json, kept inside the plugin)."""
+    found = {}
+    for f in [root / ".mcp.json"] + [p for p in plugin_paths(root, "mcpServers") if p.is_file()]:
+        servers = _json(f).get("mcpServers")
+        if isinstance(servers, dict):
+            found.update(servers)
+    inline = _json(root / ".claude-plugin" / "plugin.json").get("mcpServers")
+    if isinstance(inline, dict):
+        found.update(inline)
+    return sorted(k for k in found if isinstance(k, str))
+
+
+def plugin_mcp(claude_home: Path, project_dir: Path | None) -> dict[str, list[str]]:
+    """{plugin settings key: MCP server names} for enabled plugins that start any."""
+    out = {}
+    for key, root in enabled_plugins(claude_home, project_dir):
+        try:  # one odd third-party plugin must not take down the whole lookup
+            names = mcp_servers(root)
+        except (OSError, TypeError, ValueError):
+            continue
+        if names:
+            out[key] = names
+    return out
+
+
 def list_skills(claude_home: Path, project_dir: Path | None, hashed: bool = True) -> list[dict]:
     """hashed=False skips content hashes (reading every .md in each skill folder): hooks need only ids, fast."""
     out: dict[str, dict] = {}
@@ -96,6 +142,10 @@ def list_skills(claude_home: Path, project_dir: Path | None, hashed: bool = True
     def add(source, name, kind, path):
         sid = f"{source}:{name}"
         if sid in out:
+            # an agent named like a skill or command loses the id: status reports it (a plugin's command shim for its
+            # own same-named skill is the same thing twice, so that pair is not reported)
+            if kind == "agent" and out[sid]["kind"] != "agent":
+                out[sid].setdefault("shadows", []).append(kind)
             return
         try:
             data = path.read_bytes()
@@ -103,7 +153,7 @@ def list_skills(claude_home: Path, project_dir: Path | None, hashed: bool = True
             return
         text = data.decode("utf-8", errors="replace")
         fm = frontmatter.read(path)
-        if fm is None and kind == "skill":  # a SKILL.md without frontmatter is not a loadable skill
+        if fm is None and kind in ("skill", "agent"):  # without frontmatter neither is loadable
             return
         desc = " ".join(str((fm or {}).get("description") or "").split()) or _first_line(text)
         if not desc:
@@ -121,26 +171,24 @@ def list_skills(claude_home: Path, project_dir: Path | None, hashed: bool = True
         for cmd in sorted(d.glob("*.md")):
             add(source, cmd.stem, "command", cmd)
 
+    def agent(path, source):
+        add(source, str((frontmatter.read(path) or {}).get("name") or path.stem), "agent", path)
+
+    def agents_in(d, source):
+        for a in sorted(d.glob("*.md")):
+            agent(a, source)
+
     skills_in(claude_home / "skills", "user")
     commands_in(claude_home / "commands", "user")
+    agents_in(claude_home / "agents", "user")
 
-    settings = [claude_home / "settings.json"]
     if project_dir is not None:
         src = project_source(project_dir)
         skills_in(project_dir / ".claude/skills", src)
         commands_in(project_dir / ".claude/commands", src)
-        settings += [project_dir / ".claude/settings.json", project_dir / ".claude/settings.local.json"]
+        agents_in(project_dir / ".claude/agents", src)
 
-    enabled: dict = {}
-    for s in settings:  # later file wins
-        ep = _json(s).get("enabledPlugins")
-        if isinstance(ep, dict):
-            enabled.update(ep)
-    installed = _json(claude_home / "plugins/installed_plugins.json").get("plugins") or {}
-    for key in sorted(k for k, v in enabled.items() if v):
-        root = install_root(installed.get(key) if isinstance(installed, dict) else None, project_dir)
-        if root is None:
-            continue
+    for key, root in enabled_plugins(claude_home, project_dir):
         plugin = key.split("@")[0]
         try:  # one odd third-party plugin must not take down the whole scan
             for d in skill_dirs(root):
@@ -150,6 +198,11 @@ def list_skills(claude_home: Path, project_dir: Path | None, hashed: bool = True
                     commands_in(c, plugin)
                 elif c.suffix == ".md":
                     add(plugin, c.stem, "command", c)
+            for a in plugin_paths(root, "agents"):
+                if a.is_dir():
+                    agents_in(a, plugin)
+                elif a.suffix == ".md":
+                    agent(a, plugin)
         except (OSError, TypeError, ValueError):
             continue
         for rec in out.values():  # the settings key hygiene tells the user to disable
@@ -158,11 +211,19 @@ def list_skills(claude_home: Path, project_dir: Path | None, hashed: bool = True
     return list(out.values())
 
 
+def _homes() -> tuple[Path, Path]:
+    """(claude_home, project_dir) for this session (env overrides for tests)."""
+    return (Path(os.environ.get("SWITCHBOARD_CLAUDE_HOME") or Path.home() / ".claude"),
+            Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()))
+
+
 def current(hashed: bool = True) -> dict:
-    """Skills mapping {id: record} for this session (env overrides for tests)."""
-    claude_home = Path(os.environ.get("SWITCHBOARD_CLAUDE_HOME") or Path.home() / ".claude")
-    project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
-    return {s["id"]: s for s in list_skills(claude_home, project, hashed)}
+    """Skills mapping {id: record} for this session."""
+    return {s["id"]: s for s in list_skills(*_homes(), hashed)}
+
+
+def current_mcp() -> dict[str, list[str]]:
+    return plugin_mcp(*_homes())
 
 
 def write_inventory(skills: list[dict]) -> Path:
