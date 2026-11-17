@@ -91,7 +91,7 @@ class McpTest(unittest.TestCase):
         self.assertFalse(r["overlap"])
         err, st = self.call("status")
         self.assertEqual((st["skills"], st["profiled"], st["pending"]), (4, 1, 3))
-        self.assertEqual((st["by_kind"], st["shadowed"]), ({"skill": 3, "command": 1}, []))
+        self.assertEqual(st["by_kind"], {"skill": 3, "command": 1})
         first, rest = self.call("pending_profiles", limit=2)[1], self.call("pending_profiles", limit=2, offset=2)[1]
         self.assertEqual((len(first["pending"]), first["next_offset"], len(rest["pending"])), (2, 2, 1))
         self.assertNotIn("next_offset", rest)  # last page

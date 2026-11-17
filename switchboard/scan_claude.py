@@ -139,20 +139,22 @@ def list_skills(claude_home: Path, project_dir: Path | None, hashed: bool = True
     """hashed=False skips content hashes (reading every .md in each skill folder): hooks need only ids, fast."""
     out: dict[str, dict] = {}
 
-    def add(source, name, kind, path):
+    def add(source, name, kind, path, fm=False):
         sid = f"{source}:{name}"
+        # agents are their own namespace in Claude Code: one named like a skill or command gets a kind-qualified id
+        # (agents are scanned after skills and commands of the same source; a plugin's command shim for its own
+        # same-named skill is the same thing twice, so the first one keeps the id)
+        if sid in out and kind == "agent" and out[sid]["kind"] != "agent":
+            sid = f"{source}:agent:{name}"
         if sid in out:
-            # an agent named like a skill or command loses the id: status reports it (a plugin's command shim for its
-            # own same-named skill is the same thing twice, so that pair is not reported)
-            if kind == "agent" and out[sid]["kind"] != "agent":
-                out[sid].setdefault("shadows", []).append(kind)
             return
         try:
             data = path.read_bytes()
         except OSError:
             return
         text = data.decode("utf-8", errors="replace")
-        fm = frontmatter.read(path)
+        if fm is False:  # False: not parsed yet (None means the file has no frontmatter)
+            fm = frontmatter.read(path)
         if fm is None and kind in ("skill", "agent"):  # without frontmatter neither is loadable
             return
         desc = " ".join(str((fm or {}).get("description") or "").split()) or _first_line(text)
@@ -172,7 +174,8 @@ def list_skills(claude_home: Path, project_dir: Path | None, hashed: bool = True
             add(source, cmd.stem, "command", cmd)
 
     def agent(path, source):
-        add(source, str((frontmatter.read(path) or {}).get("name") or path.stem), "agent", path)
+        fm = frontmatter.read(path)
+        add(source, str((fm or {}).get("name") or path.stem), "agent", path, fm)
 
     def agents_in(d, source):
         for a in sorted(d.glob("*.md")):

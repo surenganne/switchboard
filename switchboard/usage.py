@@ -45,7 +45,7 @@ def resolve_ids(names, kinds=None) -> list:
     inv = of_kind(cached_inventory(), kinds)
     ids = [resolve(n, inv) for n in names]
     if None in ids:
-        live = of_kind(scan_claude.current(), kinds)
+        live = of_kind(scan_claude.current(hashed=False), kinds)  # ids only: hashing would stall the 10s hook
         ids = [i or resolve(n, live) for n, i in zip(names, ids)]
     return [i for i in ids if i]
 
@@ -60,12 +60,17 @@ def clear_seen() -> None:
 
 def resolve(name: str, inv: dict):
     """Installed skill id for a name as Claude or the user wrote it, or None (so free text is never stored)."""
-    if name in inv:
-        return name
-    if f"user:{name}" in inv:
-        return f"user:{name}"
-    proj = [i for i in inv if i.startswith("project:") and i.split(":", 2)[-1] == name]
-    return proj[0] if len(proj) == 1 else None
+    src, _, bare = name.rpartition(":")
+    # then as an agent named like a skill, which has a kind-qualified id (source:agent:name)
+    for n in (name, f"{src}:agent:{bare}" if src else f"agent:{name}"):
+        if n in inv:
+            return n
+        if f"user:{n}" in inv:
+            return f"user:{n}"
+        proj = [i for i in inv if i.startswith("project:") and i.split(":", 2)[-1] == n]
+        if len(proj) == 1:
+            return proj[0]
+    return None
 
 
 def record(ids, today=None) -> None:

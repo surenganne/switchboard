@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from switchboard import paths, scan_claude
+from switchboard import paths, scan_claude, usage
 
 
 def write(p, text):
@@ -82,13 +82,16 @@ class ScanTest(unittest.TestCase):
         self.assertEqual(rec["plug:reviewer"]["content_hash"], hashlib.sha256(
             (self.root / "plugins/plug/agents/reviewer-file.md").read_bytes()).hexdigest()[:16])
 
-    def test_agent_named_like_a_skill_is_reported_not_silently_dropped(self):
+    def test_agent_named_like_a_skill_gets_its_own_id(self):
         write(self.ch / "agents/alpha.md", "---\nname: alpha\ndescription: Agent alpha\n---\nx\n")
         rec = {s["id"]: s for s in scan_claude.list_skills(self.ch, self.proj)}
-        self.assertEqual((rec["user:alpha"]["kind"], rec["user:alpha"]["shadows"]), ("skill", ["agent"]))
+        self.assertEqual((rec["user:alpha"]["kind"], rec["user:agent:alpha"]["kind"]), ("skill", "agent"))
+        self.assertEqual(usage.resolve("alpha", usage.of_kind(rec, ("agent",))), "user:agent:alpha")
+        self.assertEqual(usage.resolve("alpha", usage.of_kind(rec, ("skill",))), "user:alpha")
         write(self.root / "plugins/plug/commands/beta.md", "---\ndescription: Shim for skill beta\n---\nx\n")
         rec = {s["id"]: s for s in scan_claude.list_skills(self.ch, self.proj)}
-        self.assertNotIn("shadows", rec["plug:beta"])  # a command shim for its own skill is not reported
+        self.assertEqual(rec["plug:beta"]["kind"], "skill")  # a command shim for its own skill: the skill keeps the id
+        self.assertNotIn("plug:agent:beta", rec)
 
     def test_plugin_mcp_servers(self):
         plug = self.root / "plugins/plug"

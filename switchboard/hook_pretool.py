@@ -64,7 +64,8 @@ try:
             return
         inv = scan_claude.current(hashed=False)  # live scan: the shared inventory.json may belong to another project
         profs = profiles.load_all()
-        overlap = set(route.overlap_categories(profs, inv))
+        # skills and commands only: agents are never gated, so an agent-only overlap must not block a skill
+        overlap = set(route.overlap_categories(profs, usage.of_kind(inv, SKILL_KINDS)))
         if not any(overlap & set(profs[pid].get("categories") or []) for pid in profile_ids(skill, profs)
                    if inv.get(pid, {}).get("kind") in SKILL_KINDS):
             return

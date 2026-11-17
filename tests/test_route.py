@@ -159,6 +159,15 @@ class RouteTest(unittest.TestCase):
             self.assertLessEqual(set(c), {"id", "kind", "invoke", "score", "does", "best_for", "not_for", "role", "cost",
                                           "stale", "past_choices"})
         self.assertNotIn("content_hash", json.dumps(r))  # the rest of the profile stays local
+        # still over the cap at MIN_KEEP: text fields are shed, the candidates stay
+        old, route.MAX_BYTES = route.MAX_BYTES, 900
+        try:
+            r = route.route({"category": "code-review", "targets": ["pr"]}, profs, inv, [])
+        finally:
+            route.MAX_BYTES = old
+        self.assertLessEqual(len(json.dumps(r)), 900)
+        self.assertEqual(len(r["candidates"]), route.MIN_KEEP)
+        self.assertTrue(all("not_for" not in c and "invoke" in c for c in r["candidates"]))
 
     def test_overlap_categories(self):
         self.assertEqual(route.overlap_categories(FIX["profiles"], FIX["inventory"]), ["code-review"])

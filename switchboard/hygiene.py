@@ -9,9 +9,10 @@ import math
 from collections import defaultdict
 from datetime import date, timedelta
 
+from switchboard.route import MAX_BYTES  # one result-size cap for every MCP result
+
 DEFAULT_DAYS, MIN_DAYS, MAX_DAYS = 30, 7, 365
 MOSTLY_UNUSED = 0.2  # a plugin where at most 1 in 5 skills was used
-MAX_BYTES = 3800  # same cap as route.MAX_BYTES
 
 
 def tokens(rec: dict) -> int:
@@ -80,8 +81,9 @@ def suggest(inv: dict, rows: list, seen: dict, today: str, days=DEFAULT_DAYS, re
 
 
 def fit(out: dict) -> dict:
-    """Drop the smallest suggestions until the result fits MAX_BYTES (context-mode replaces MCP results over
-    4096 bytes); `omitted` counts them. The token totals still cover every suggestion."""
+    """Drop suggestions until the result fits MAX_BYTES (context-mode replaces MCP results over 4096 bytes):
+    the smallest single skills first, then mostly-unused plugins, then whole plugins (one toggle each, so they
+    are kept longest). `omitted` counts them; the token totals still cover every suggestion."""
     omitted = {}
     while len(json.dumps(out)) > MAX_BYTES:
         key = next((k for k in ("skills", "mostly_unused", "plugins") if out[k]), None)

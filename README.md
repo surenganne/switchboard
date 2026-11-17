@@ -269,8 +269,8 @@ recording, create `~/.switchboard/settings.json` with `{"record_choices": false}
   routed.
 - Skills, commands and agents only; MCP tools and hooks are not routed. Built-in agents (such as
   `general-purpose` and `Explore`) have no files on disk, so they are not routed either.
-- An agent named like a skill or command from the same source is left out of the inventory (the skill or
-  command keeps the id); `/switchboard:status` lists these under `shadowed`.
+- An agent named like a skill or command from the same source gets the id `<source>:agent:<name>` (the skill
+  or command keeps `<source>:<name>`); both are routed.
 - Fingerprints cover a skill's `.md` files only, so an update that changes only its scripts does not mark it
   for re-profiling.
 - Hygiene suggests whole plugins, not single plugin skills. Its token figures are estimates (about 4

@@ -12,7 +12,7 @@ from datetime import date  # noqa: E402
 
 from switchboard import choices, hygiene, profiles, report, route, scan_claude, usage  # noqa: E402
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")  # newest first; the subset this server speaks
 OBJ = {"type": "object"}
 STRS = {"type": "array", "items": {"type": "string"}}
@@ -31,11 +31,12 @@ TASK = {"type": "object", "description": "Structured task: category (required), 
 PAGE = {"limit": {"type": "integer", "minimum": 1, "maximum": 1000}, "offset": {"type": "integer", "minimum": 0}}
 
 
-def page(items: list, args: dict, default: int) -> dict:
-    """One page of `items`, with `next_offset` while more remain (pages keep each result small)."""
+def page(items: list, args: dict, default: int, enrich=dict) -> dict:
+    """One page of `items`, with `next_offset` while more remain (pages keep each result small); `enrich` runs on
+    that page only."""
     limit = max(1, min(int(args.get("limit") or default), 1000))
     start = max(0, int(args.get("offset") or 0))
-    out = {"total": len(items), "pending": items[start:start + limit]}
+    out = {"total": len(items), "pending": [enrich(p) for p in items[start:start + limit]]}
     if start + limit < len(items):
         out["next_offset"] = start + limit
     return out
@@ -102,24 +103,21 @@ def call_tool(name: str, args: dict):
         return {"recorded": True, "chosen": chosen}
     if name == "pending_profiles":
         inv = inventory()
-        pend = [dict(p, source=inv[p["id"]]["source"], content_hash=inv[p["id"]]["content_hash"])
-                for p in profiles.pending(inv)]
-        return page(pend, args, 15)
+        return page(profiles.pending(inv), args, 15,
+                    lambda p: dict(p, source=inv[p["id"]]["source"], content_hash=inv[p["id"]]["content_hash"]))
     if name == "save_profile":
         errs = profiles.save(args.get("profile"), inventory())
         return {"saved": not errs, "errors": errs}
     if name == "pending_roles":
         inv = inventory()
-        pend = [dict(p, name=inv[p["id"]].get("name"), description=inv[p["id"]].get("description"))
-                for p in profiles.pending_roles(inv)]
-        return page(pend, args, 10)
+        return page(profiles.pending_roles(inv), args, 10,
+                    lambda p: dict(p, name=inv[p["id"]].get("name"), description=inv[p["id"]].get("description")))
     if name == "set_role":
         errs = profiles.set_role(args.get("id"), args.get("content_hash"), args.get("role"), inventory())
         return {"saved": not errs, "errors": errs}
     if name == "status":
         inv, profs = inventory(), profiles.load_all()
         return {"skills": len(inv), "by_kind": dict(Counter(r.get("kind", "skill") for r in inv.values())),
-                "shadowed": sorted(sid for sid, r in inv.items() if r.get("shadows")),
                 "profiled": sum(1 for s in profs if s in inv),
                 "missing_role": len(profiles.pending_roles(inv)),
                 "pending": len(profiles.pending(inv)), "overlap_categories": route.overlap_categories(profs, inv),

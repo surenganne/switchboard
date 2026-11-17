@@ -92,6 +92,11 @@ def route(task: dict, profiles: dict, inventory: dict, past: list[dict]) -> dict
     # context tools (such as context-mode) swap larger MCP results for a search stub Claude cannot read
     while len(json.dumps(out)) > MAX_BYTES and len(cands) > MIN_KEEP:
         cands.pop()
+    for k in ("not_for", "best_for", "does"):  # still too big at MIN_KEEP: shed text fields, least needed first
+        if len(json.dumps(out)) <= MAX_BYTES:
+            break
+        for c in cands:
+            c.pop(k, None)
     return out
 
 

@@ -117,7 +117,7 @@ def summarise(inventory: dict, profiles: dict, rows: list, usage_rows=(), mcp=No
     src_prof = Counter(str(inventory[s].get("source", "?")) for s in installed)
     src_kind = Counter((str(r.get("source", "?")), _kind(inventory, sid)) for sid, r in inventory.items())
     return {
-        "generated": date.today().isoformat(),
+        "generated": now.isoformat(),
         "skills": len(inventory),
         "profiled": len(installed),
         "stale": sum(1 for s, p in installed.items() if p.get("content_hash") != inventory[s].get("content_hash")),
