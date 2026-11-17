@@ -287,6 +287,10 @@ Restart Claude Code to load it. Updates follow the `version` in `.claude-plugin/
 does not bump it is not picked up. Your profiles and choices in `~/.switchboard` are kept; skills whose text
 changed are offered for re-profiling at the next session start.
 
+Each version is listed under [Releases](https://github.com/surenganne/switchboard/releases): a merge to
+`main` that bumps `version` (in both `.claude-plugin/plugin.json` and `switchboard/mcp_server.py`) is tagged
+and released by `.github/workflows/release.yml`, with notes listing the PRs since the previous release.
+
 From a local checkout (`claude plugin marketplace add ./switchboard`), pull or edit the checkout, then run
 the same two commands.
 

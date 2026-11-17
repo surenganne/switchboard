@@ -1,0 +1,36 @@
+name: release
+
+# A merge to main that bumps .claude-plugin/plugin.json gets a tag and a GitHub Release.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release the plugin version if it is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="v$(jq -r .version .claude-plugin/plugin.json)"
+          server="v$(sed -n 's/^VERSION = "\(.*\)"/\1/p' switchboard/mcp_server.py)"
+          if [ "$v" != "$server" ]; then
+            echo "::error::plugin.json says $v but mcp_server.py VERSION says $server"
+            exit 1
+          fi
+          if gh release view "$v" >/dev/null 2>&1; then
+            echo "$v is already released"
+            exit 0
+          fi
+          prev=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // empty')
+          gh release create "$v" --target "$GITHUB_SHA" --title "$v" --generate-notes \
+            ${prev:+--notes-start-tag "$prev"}
