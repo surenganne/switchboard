@@ -50,7 +50,9 @@ class McpTest(unittest.TestCase):
         self.assertIn("result", self.rpc("ping"))
         tools = {t["name"] for t in self.rpc("tools/list")["result"]["tools"]}
         self.assertEqual(tools, {"route", "record_choice", "pending_profiles", "save_profile", "pending_roles", "set_role",
-                                 "status", "audit", "forget", "report", "hygiene"})
+                                 "pending_domains", "set_domain", "pending_focus_tags", "set_focus_tag",
+                                 "pending_target_tags", "set_target_tag", "status", "audit", "forget", "report",
+                                 "hygiene", "report_native_skills"})
 
     def test_hygiene_collecting(self):
         err, out = self.call("hygiene")
@@ -73,6 +75,22 @@ class McpTest(unittest.TestCase):
         err, ok = self.call("set_role", id="user:alpha", content_hash=alpha["content_hash"], role="performs")
         self.assertEqual(ok, {"saved": True, "errors": []})
         self.assertEqual(self.call("status")[1]["missing_role"], 0)
+
+    def test_domain_backfill_roundtrip(self):
+        err, pend = self.call("pending_profiles", limit=20)
+        alpha = next(p for p in pend["pending"] if p["id"] == "user:alpha")
+        prof = {"id": "user:alpha", "source": alpha["source"], "content_hash": alpha["content_hash"],
+                "categories": ["other"], "does": "Does an odd thing.", "targets": [], "focus": [],
+                "depth": "standard", "cost": "single-pass", "stack": ["any"], "best_for": [], "not_for": []}
+        self.assertTrue(self.call("save_profile", profile=prof)[1]["saved"])
+        self.assertEqual(self.call("status")[1]["missing_domain"], 1)
+        err, doms = self.call("pending_domains", limit=10)
+        self.assertEqual([(d["id"], d["name"], d["description"]) for d in doms["pending"]],
+                         [("user:alpha", "alpha", "User skill alpha")])
+        err, ok = self.call("set_domain", id="user:alpha", content_hash=alpha["content_hash"], domain="video-editing")
+        self.assertEqual(ok, {"saved": True, "errors": []})
+        self.assertEqual(self.call("status")[1]["missing_domain"], 0)
+        self.assertTrue(self.call("set_domain", id="user:alpha", content_hash=alpha["content_hash"], domain="Not OK!")[1]["errors"])
 
     def test_save_then_route_roundtrip(self):
         err, pend = self.call("pending_profiles", limit=20)
@@ -108,6 +126,29 @@ class McpTest(unittest.TestCase):
         err, refused = self.call("forget")  # deleting needs an explicit confirm
         self.assertEqual((refused["removed"], refused["error"][:8]), (0, "confirm:"))
         self.assertEqual(self.call("forget", confirm=True)[1], {"removed": 1, "usage_removed": 0})
+
+    def test_native_skill_reported_profiled_and_routed(self):
+        err, rep = self.call("report_native_skills", skills=[
+            {"name": "code-review", "description": "Review the current diff for correctness bugs."},
+            {"name": "alpha", "description": "Must be dropped: a real file already backs this name."}])
+        self.assertEqual((err, rep), (False, {"recorded": 1}))
+        err, pend = self.call("pending_profiles", limit=20)
+        native = next(p for p in pend["pending"] if p["id"] == "native:code-review")
+        self.assertEqual((native["kind"], native["path"], native["source"]), ("skill", None, "native"))
+        self.assertEqual(native["description"], "Review the current diff for correctness bugs.")
+        prof = {"id": "native:code-review", "source": "native", "content_hash": native["content_hash"],
+                "categories": ["code-review"], "does": "Reviews the diff for bugs.", "targets": ["local-diff"],
+                "focus": ["correctness"], "depth": "standard", "cost": "single-pass", "stack": ["any"],
+                "best_for": [], "not_for": [], "role": "performs"}
+        self.assertTrue(self.call("save_profile", profile=prof)[1]["saved"])
+        err, r = self.call("route", task={"category": "code-review", "targets": ["local-diff"], "focus": ["correctness"]})
+        self.assertIn("native:code-review", [c["id"] for c in r["candidates"]])
+        cand = next(c for c in r["candidates"] if c["id"] == "native:code-review")
+        self.assertEqual(cand["invoke"], {"tool": "Skill", "skill": "code-review"})  # bare name: no file, no prefix
+        # a bare name also resolves for record_choice, same as a user skill
+        self.assertEqual(self.call("record_choice", task={"category": "code-review"},
+                                   offered=["native:code-review"], chosen="code-review")[1],
+                         {"recorded": True, "chosen": "native:code-review"})
 
     def test_record_choice_resolves_bare_name_and_rejects_unknown(self):
         log = Path(self.tmp.name) / "sbhome" / "choices.jsonl"

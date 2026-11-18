@@ -221,12 +221,55 @@ def _homes() -> tuple[Path, Path]:
 
 
 def current(hashed: bool = True) -> dict:
-    """Skills mapping {id: record} for this session."""
-    return {s["id"]: s for s in list_skills(*_homes(), hashed)}
+    """Skills mapping {id: record} for this session, plus any reported native skills (see report_native)."""
+    out = {s["id"]: s for s in list_skills(*_homes(), hashed)}
+    names = {s["name"] for s in out.values()}
+    out.update({sid: s for sid, s in native_skills().items() if s.get("name") not in names})
+    return out
 
 
 def current_mcp() -> dict[str, list[str]]:
     return plugin_mcp(*_homes())
+
+
+NATIVE_MAX, NATIVE_DESC_MAX = 300, 400  # cap a reporting call: this is user-approved input, not a file scan
+
+
+def _native_file() -> Path:
+    return paths.home() / "native_skills.json"
+
+
+def report_native(skills) -> int:
+    """Record skills Claude's host reports from its own, unprefixed skill listing that have no backing file
+    anywhere this scan looks (Claude Code's own built-ins: compiled into the app, so nothing to read a path
+    from). A name that matches a real file-backed skill is dropped here, so a plugin or user skill can never
+    be mislabeled as native. Returns how many were kept."""
+    known_names = {r["name"] for r in list_skills(*_homes(), hashed=False)}
+    out = {}
+    for s in list(skills or [])[:NATIVE_MAX]:
+        if not isinstance(s, dict):
+            continue
+        name = s.get("name")
+        desc = " ".join(str(s.get("description") or "").split())
+        if not isinstance(name, str) or not name or len(name) > 100 or ":" in name or name in known_names or not desc:
+            continue
+        desc_chars = len(desc)
+        desc = desc[:NATIVE_DESC_MAX]
+        sid = f"native:{name}"
+        out[sid] = {"id": sid, "name": name, "source": "native", "kind": "skill", "path": None,
+                    "description": desc[:240], "desc_chars": desc_chars,
+                    "content_hash": hashlib.sha256(desc.encode()).hexdigest()[:16]}
+    paths.write_private(_native_file(), json.dumps(out, indent=1, sort_keys=True))
+    return len(out)
+
+
+def native_skills() -> dict[str, dict]:
+    """Skills written by report_native, as {id: record}; empty until the profiling skill has reported any."""
+    try:
+        data = json.loads(_native_file().read_text())
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def write_inventory(skills: list[dict]) -> Path:

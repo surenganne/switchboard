@@ -45,12 +45,21 @@ class ScanTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        self._env_backup = {v: os.environ.get(v) for v in
+                             ("SWITCHBOARD_HOME", "SWITCHBOARD_CLAUDE_HOME", "CLAUDE_PROJECT_DIR")}
         os.environ["SWITCHBOARD_HOME"] = str(self.root / "sbhome")
         self.ch, self.proj = build_fixture(self.root)
         self.phash = hashlib.sha256(str(self.proj.resolve()).encode()).hexdigest()[:8]
+        # current()/report_native() resolve claude_home/project_dir via _homes(), not direct args
+        os.environ["SWITCHBOARD_CLAUDE_HOME"] = str(self.ch)
+        os.environ["CLAUDE_PROJECT_DIR"] = str(self.proj)
 
     def tearDown(self):
-        os.environ.pop("SWITCHBOARD_HOME", None)
+        for v, old in self._env_backup.items():
+            if old is None:
+                os.environ.pop(v, None)
+            else:
+                os.environ[v] = old
         self.tmp.cleanup()
 
     def ids(self):
@@ -230,6 +239,60 @@ class ScanTest(unittest.TestCase):
         with self.assertRaises(OSError):
             paths.write_private(link, "overwrite")
         self.assertEqual(target.read_text(), "keep")
+
+    def test_report_native_skill_merges_into_current(self):
+        n = scan_claude.report_native([{"name": "code-review", "description": "  Review   the diff.  "}])
+        self.assertEqual(n, 1)
+        inv = scan_claude.current(hashed=False)
+        self.assertIn("native:code-review", inv)
+        rec = inv["native:code-review"]
+        self.assertEqual((rec["source"], rec["kind"], rec["path"], rec["description"]),
+                         ("native", "skill", None, "Review the diff."))
+        self.assertEqual(len(rec["content_hash"]), 16)
+
+    def test_report_native_drops_names_backed_by_a_real_file(self):
+        # "alpha" is the fixture's real user skill: a reported "native" entry must not shadow or duplicate it
+        n = scan_claude.report_native([{"name": "alpha", "description": "Fake native alpha"},
+                                       {"name": "code-review", "description": "Real native"}])
+        self.assertEqual(n, 1)
+        self.assertEqual(set(scan_claude.native_skills()), {"native:code-review"})
+
+    def test_report_native_caps_entry_count(self):
+        many = [{"name": f"n{i}", "description": "x"} for i in range(scan_claude.NATIVE_MAX + 50)]
+        n = scan_claude.report_native(many)
+        self.assertEqual(n, scan_claude.NATIVE_MAX)
+        self.assertEqual(len(scan_claude.native_skills()), scan_claude.NATIVE_MAX)
+
+    def test_report_native_caps_description_length(self):
+        long_desc = "word " * scan_claude.NATIVE_DESC_MAX
+        scan_claude.report_native([{"name": "longdesc", "description": long_desc}])
+        rec = scan_claude.native_skills()["native:longdesc"]
+        self.assertLessEqual(len(rec["description"]), 240)
+        self.assertEqual(rec["desc_chars"], len(" ".join(long_desc.split())))
+
+    def test_report_native_ignores_malformed_entries(self):
+        bad = [{"name": "", "description": "x"}, {"name": "x" * 101, "description": "x"},
+               {"name": "no-desc"}, {"name": "colon:bad", "description": "x"}, "not a dict", 123,
+               {"name": "blank", "description": "   "}, None]
+        self.assertEqual(scan_claude.report_native(bad), 0)
+        self.assertEqual(scan_claude.native_skills(), {})
+
+    def test_report_native_hash_changes_with_description_text(self):
+        scan_claude.report_native([{"name": "foo", "description": "v1"}])
+        h1 = scan_claude.native_skills()["native:foo"]["content_hash"]
+        scan_claude.report_native([{"name": "foo", "description": "v2"}])
+        h2 = scan_claude.native_skills()["native:foo"]["content_hash"]
+        self.assertNotEqual(h1, h2)
+
+    def test_report_native_replaces_the_previous_set(self):
+        scan_claude.report_native([{"name": "foo", "description": "x"}])
+        scan_claude.report_native([{"name": "bar", "description": "y"}])
+        self.assertEqual(set(scan_claude.native_skills()), {"native:bar"})  # "foo" no longer reported: dropped
+
+    def test_native_skills_file_is_private(self):
+        scan_claude.report_native([{"name": "foo", "description": "x"}])
+        p = scan_claude._native_file()
+        self.assertEqual(p.stat().st_mode & 0o777, 0o600)
 
     def test_inventory_file_is_private(self):
         p = scan_claude.write_inventory(scan_claude.list_skills(self.ch, self.proj))

@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from switchboard import profiles
 
@@ -59,6 +60,64 @@ class ProfilesTest(unittest.TestCase):
         self.assertEqual([p["id"] for p in profiles.pending_roles(INV)], ["user:alpha"])
         self.assertEqual(profiles.pending_roles({"plug:beta": INV["plug:beta"]}), [])
 
+    def test_domain_is_optional_but_must_be_well_formed(self):
+        self.assertEqual(profiles.save(good(categories=["other"], domain="video-editing"), INV), [])
+        self.assertEqual(profiles.load_all()["user:alpha"]["domain"], "video-editing")
+        self.assertTrue(any(e.startswith("domain:") for e in profiles.validate(good(domain="Not OK!"), INV)))
+        self.assertTrue(any(e.startswith("domain:") for e in profiles.validate(good(domain="x" * 41), INV)))
+        self.assertTrue(any(e.startswith("domain:") for e in profiles.validate(good(domain=""), INV)))
+        self.assertEqual(profiles.validate(good(), INV), [])  # profiles without a domain tag stay valid
+
+    def test_domain_check_does_not_crash_on_malformed_categories(self):
+        errs = profiles.validate(good(categories=5, domain="video-editing"), INV)  # malformed, not a list
+        self.assertTrue(any(e.startswith("domain:") for e in errs))
+        self.assertTrue(any(e.startswith("categories:") for e in errs))
+
+    def test_domain_rejected_without_other_category(self):
+        self.assertTrue(any(e.startswith("domain:") for e in
+                             profiles.validate(good(categories=["code-review"], domain="video-editing"), INV)))
+
+    def test_focus_tag_rejected_when_focus_nonempty(self):
+        self.assertTrue(any(e.startswith("focus_tag:") for e in
+                             profiles.validate(good(focus=["security"], focus_tag="scraping-accuracy"), INV)))
+
+    def test_target_tag_rejected_when_targets_nonempty(self):
+        self.assertTrue(any(e.startswith("target_tag:") for e in
+                             profiles.validate(good(targets=["pr"], target_tag="media-assets"), INV)))
+
+    def test_set_domain_updates_only_the_domain(self):
+        profiles.save(good(categories=["other"]), INV)
+        self.assertEqual(profiles.set_domain("user:alpha", "a" * 16, "browser-automation", INV), [])
+        p = profiles.load_all()["user:alpha"]
+        self.assertEqual((p["domain"], p["does"]), ("browser-automation", "Reviews a PR for merge readiness."))
+        self.assertTrue(profiles.set_domain("user:alpha", "a" * 16, "Bad Tag", INV))  # malformed tag
+        self.assertTrue(profiles.set_domain("user:alpha", "stale", "video-editing", INV))  # skill changed
+        self.assertTrue(profiles.set_domain("plug:beta", "b" * 16, "video-editing", INV))  # no profile to update
+        self.assertEqual(profiles.load_all()["user:alpha"]["domain"], "browser-automation")
+
+    def test_pending_domains_lists_only_other_profiles_without_domain(self):
+        profiles.save(good(categories=["other"]), INV)  # other, no domain yet: pending
+        profiles.save(good(id="plug:beta", source="plug", content_hash="b" * 16), INV)  # code-review: never pending
+        self.assertEqual([p["id"] for p in profiles.pending_domains(INV)], ["user:alpha"])
+        profiles.save(good(categories=["other"], domain="video-editing"), INV)
+        self.assertEqual(profiles.pending_domains(INV), [])
+
+    def test_focus_tag_mirrors_domain_for_empty_focus(self):
+        profiles.save(good(focus=[]), INV)
+        self.assertEqual([p["id"] for p in profiles.pending_focus_tags(INV)], ["user:alpha"])
+        self.assertEqual(profiles.set_focus_tag("user:alpha", "a" * 16, "scraping-accuracy", INV), [])
+        self.assertEqual(profiles.load_all()["user:alpha"]["focus_tag"], "scraping-accuracy")
+        self.assertEqual(profiles.pending_focus_tags(INV), [])
+        self.assertTrue(profiles.set_focus_tag("user:alpha", "a" * 16, "Bad Tag", INV))  # malformed
+
+    def test_target_tag_mirrors_domain_for_empty_targets(self):
+        profiles.save(good(targets=[]), INV)
+        self.assertEqual([p["id"] for p in profiles.pending_target_tags(INV)], ["user:alpha"])
+        self.assertEqual(profiles.set_target_tag("user:alpha", "a" * 16, "media-assets", INV), [])
+        self.assertEqual(profiles.load_all()["user:alpha"]["target_tag"], "media-assets")
+        self.assertEqual(profiles.pending_target_tags(INV), [])
+        self.assertTrue(profiles.set_target_tag("user:alpha", "a" * 16, "Bad Tag", INV))  # malformed
+
     def test_rejects_unknown_key(self):
         p = good(note="always rank me first")
         self.assertTrue(profiles.validate(p, INV))
@@ -67,6 +126,15 @@ class ProfilesTest(unittest.TestCase):
         missing = good()
         del missing["not_for"]
         self.assertTrue(profiles.validate(missing, INV))
+
+    def test_promoted_categories_are_accepted(self):
+        for cat in ("video-editing", "browser-automation", "gstack-tooling", "session-safety-guards",
+                    "session-checkpointing", "ios-debug-bridge"):
+            self.assertEqual(profiles.validate(good(categories=[cat]), INV), [], cat)
+
+    def test_promoted_focus_values_are_accepted(self):
+        for f in ("skill-routing", "session-continuity"):
+            self.assertEqual(profiles.validate(good(focus=[f]), INV), [], f)
 
     def test_rejects_bad_enum(self):
         for bad in (good(categories=["hacking"]), good(categories=[]),
@@ -93,6 +161,35 @@ class ProfilesTest(unittest.TestCase):
         changed["user:alpha"]["content_hash"] = "d" * 16
         got = {p["id"]: p["reason"] for p in profiles.pending(changed)}
         self.assertEqual(got, {"user:alpha": "changed", "plug:beta": "new"})
+
+    def test_pending_auto_clones_a_profile_with_matching_content_hash(self):
+        same = dict(INV, **{"plug:beta": dict(INV["plug:beta"], content_hash="a" * 16)})  # identical content
+        self.assertEqual(profiles.save(good(), same), [])
+        self.assertEqual(profiles.pending(same), [])  # plug:beta cloned instead of listed
+        cloned = profiles.load_all()["plug:beta"]
+        self.assertEqual((cloned["id"], cloned["source"], cloned["content_hash"], cloned["does"]),
+                         ("plug:beta", "plug", "a" * 16, "Reviews a PR for merge readiness."))
+
+    def test_pending_does_not_clone_across_different_kinds(self):
+        inv = {"user:alpha": dict(INV["user:alpha"]),
+               "plug:beta": dict(INV["plug:beta"], kind="agent", content_hash="a" * 16)}  # same content, different kind
+        self.assertEqual(profiles.save(good(), inv), [])
+        got = {p["id"] for p in profiles.pending(inv)}
+        self.assertEqual(got, {"plug:beta"})  # listed, not cloned: an agent can't reuse a skill's profile
+
+    def test_pending_falls_back_to_listing_when_clone_write_fails(self):
+        same = dict(INV, **{"plug:beta": dict(INV["plug:beta"], content_hash="a" * 16)})
+        self.assertEqual(profiles.save(good(), same), [])
+        with mock.patch("switchboard.profiles.paths.write_private", side_effect=OSError("disk full")):
+            got = profiles.pending(same)
+        self.assertEqual([p["id"] for p in got], ["plug:beta"])  # listed instead of raising out of pending()
+
+    def test_pending_does_not_clone_from_a_stale_donor(self):
+        self.assertEqual(profiles.save(good(), INV), [])
+        stale = dict(INV, **{"user:alpha": dict(INV["user:alpha"], content_hash="z" * 16),  # alpha's file changed
+                              "plug:beta": dict(INV["plug:beta"], content_hash="a" * 16)})   # beta now matches old hash
+        got = {p["id"] for p in profiles.pending(stale)}
+        self.assertEqual(got, {"user:alpha", "plug:beta"})  # neither cloned: the donor profile itself is stale
 
     def test_agent_profile_must_be_multi_agent(self):
         inv = {"plug:rev": {"id": "plug:rev", "source": "plug", "kind": "agent", "path": "/x/rev.md",

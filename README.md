@@ -23,7 +23,7 @@ front of you, it shows you the best two or three, each with a one-line reason, a
 
 - [Install](#install) · [First run](#first-run) · [How it works](#how-it-works) · [Commands](#commands)
 - [What you'll see](#what-youll-see) · [Activity report](#activity-report) · [Privacy](#privacy)
-- [Limits](#limits-in-v04) · [Update](#update) · [Uninstall](#uninstall) · [Development](#development)
+- [Limits](#limits-in-v07) · [Update](#update) · [Uninstall](#uninstall) · [Development](#development)
 
 ## Install
 
@@ -257,16 +257,19 @@ Everything lives in `~/.switchboard/`. Directories are mode 0700 and files 0600.
 | `last_offer.json` | A hash of the unprofiled-skill list, so you are offered profiling only when it changes |
 | `usage.jsonl` | Per skill use: date and installed skill id only (anything that is not an installed skill id is dropped) |
 | `first_seen.json` | The date each skill was first seen installed, so new skills are not called unused |
+| `native_skills.json` | Claude Code's own built-in skills, as reported by `/switchboard:profile` (name, description, a hash of the description); nothing is read from disk for these |
 
 No prompt text and no code are stored. Feature fields keep only values from the fixed lists. To stop
 recording, create `~/.switchboard/settings.json` with `{"record_choices": false}` and/or
 `{"record_usage": false}`. Past session transcripts are never read.
 
-## Limits in v0.6
+## Limits in v0.7
 
 - Claude Code only. The scanner sits behind a small interface (`list_skills`) so other platforms can follow.
-- Built-in Claude Code skills (such as `code-review` and `simplify`) have no files on disk, so they are not
-  routed.
+- Built-in Claude Code skills (such as `code-review` and `simplify`) have no files on disk, so the scanner
+  can't find them by itself. `/switchboard:profile` now reports them from the session's own skill listing
+  (via the `report_native_skills` tool) so they can still be profiled and routed to; a name already backed
+  by a real file is never overwritten by a reported one.
 - Skills, commands and agents only; MCP tools and hooks are not routed. Built-in agents (such as
   `general-purpose` and `Explore`) have no files on disk, so they are not routed either.
 - An agent named like a skill or command from the same source gets the id `<source>:agent:<name>` (the skill

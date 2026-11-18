@@ -56,7 +56,7 @@ def suggest(inv: dict, rows: list, seen: dict, today: str, days=DEFAULT_DAYS, re
     plugins, mostly, skills = [], [], []
     groups = defaultdict(list)
     for sid, rec in inv.items():
-        if rec.get("source") == "switchboard":
+        if rec.get("source") in ("switchboard", "native"):  # a native skill has no setting to disable
             continue
         if rec.get("plugin_key"):
             groups[rec["plugin_key"]].append(sid)

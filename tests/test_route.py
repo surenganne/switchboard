@@ -54,6 +54,11 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(route.invoke({"source": "project:ab12cd34", "name": "x", "kind": "agent"}),
                          {"tool": "Agent", "subagent_type": "x"})
 
+    def test_native_skill_invokes_by_bare_name(self):
+        # a Claude Code built-in has no plugin prefix to invoke it with, same as a user skill
+        self.assertEqual(route.invoke({"source": "native", "name": "code-review", "kind": "skill"}),
+                         {"tool": "Skill", "skill": "code-review"})
+
     def test_skill_for_another_language_ranks_below_any_stack(self):
         profs = copy.deepcopy(FIX["profiles"])
         profs["ecc:orch-review"].update(stack=["kotlin"], focus=["correctness", "security"], depth="thorough")

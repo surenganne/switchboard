@@ -15,6 +15,7 @@ MAX_WEEKS = 26
 TOP_N = 10
 KIND_ORDER = {"skill": 0, "command": 1, "agent": 2}
 OWN = "(your user and project entries)"  # not a plugin: no settings key to turn off
+NATIVE = "(Claude Code built-ins)"  # reported by the profiling skill, not a plugin either
 STICKERS = (Path(__file__).parent / "stickers.js").read_text()
 CSP = ("default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-"
        + base64.b64encode(hashlib.sha256(STICKERS.encode()).digest()).decode() + "'")
@@ -88,7 +89,7 @@ def summarise(inventory: dict, profiles: dict, rows: list, usage_rows=(), mcp=No
 
     plugins: dict = {}
     for sid, rec in inventory.items():
-        key = rec.get("plugin_key") or OWN
+        key = rec.get("plugin_key") or (NATIVE if rec.get("source") == "native" else OWN)
         p = plugins.setdefault(key, Counter())
         p[_kind(inventory, sid)] += 1
         p["tokens"] += hygiene.tokens(rec)

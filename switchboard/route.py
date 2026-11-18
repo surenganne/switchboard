@@ -25,7 +25,7 @@ NEXT = ("Pick the 2–3 candidates whose best_for/not_for fit this task best and
 def invoke(rec: dict) -> dict:
     """How Claude starts this entry: user and project entries go by bare name, plugin ones as plugin:name."""
     src, name = rec.get("source", ""), rec.get("name", "")
-    ref = name if src == "user" or src.startswith("project:") else f"{src}:{name}"
+    ref = name if src in ("user", "native") or src.startswith("project:") else f"{src}:{name}"
     return {"tool": "Agent", "subagent_type": ref} if rec.get("kind") == "agent" else {"tool": "Skill", "skill": ref}
 
 

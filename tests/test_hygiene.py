@@ -53,6 +53,14 @@ class HygieneTest(unittest.TestCase):
         listed = [p["plugin_key"] for p in out["plugins"] + out["mostly_unused"]] + [s["id"] for s in out["skills"]]
         self.assertFalse(any("switchboard" in x for x in listed))
 
+    def test_native_skill_excluded_from_unused_suggestions(self):
+        # there is no setting to disable a Claude Code built-in, so it must never be suggested
+        inv, rows, seen = build()
+        inv["native:code-review"] = rec("native:code-review")
+        seen["native:code-review"] = "2026-11-01"
+        out = hygiene.suggest(inv, rows, seen, TODAY)
+        self.assertNotIn("native:code-review", [s["id"] for s in out["skills"]])
+
     def test_mostly_unused(self):
         out = hygiene.suggest(*build(), TODAY)
         (q,) = out["mostly_unused"]

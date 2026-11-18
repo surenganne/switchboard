@@ -12,7 +12,7 @@ from datetime import date  # noqa: E402
 
 from switchboard import choices, hygiene, profiles, report, route, scan_claude, usage  # noqa: E402
 
-VERSION = "0.6.1"
+VERSION = "0.7.0"
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")  # newest first; the subset this server speaks
 OBJ = {"type": "object"}
 STRS = {"type": "array", "items": {"type": "string"}}
@@ -60,6 +60,33 @@ TOOLS = [
     {"name": "set_role", "description": "Set only the role of a current profile.",
      "inputSchema": schema({"id": {"type": "string"}, "content_hash": {"type": "string"},
                             "role": {"type": "string", "enum": list(profiles.ROLES)}}, ["id", "content_hash", "role"])},
+    {"name": "pending_domains", "description": "Profiled skills categorized `other` with no domain tag yet, with "
+                    "name and description to judge one. Pages: pass `offset` (from `next_offset`) for the next page.",
+     "inputSchema": schema(PAGE)},
+    {"name": "set_domain", "description": "Set a free-text domain tag on a current profile categorized `other`, "
+                    "so similar skills can later be grouped into a new category.",
+     "inputSchema": schema({"id": {"type": "string"}, "content_hash": {"type": "string"},
+                            "domain": {"type": "string", "description": "A lowercase tag, e.g. video-editing, "
+                                      "browser-automation (a-z0-9.+#- only, at most 40 chars)"}},
+                           ["id", "content_hash", "domain"])},
+    {"name": "pending_focus_tags", "description": "Profiled skills with no `focus` values and no focus tag yet, "
+                    "with name and description to judge one. Pages: pass `offset` for the next page.",
+     "inputSchema": schema(PAGE)},
+    {"name": "set_focus_tag", "description": "Set a free-text focus tag on a current profile whose `focus` list "
+                    "is empty, naming the aspect it actually cares about when none of the fixed focus values fit.",
+     "inputSchema": schema({"id": {"type": "string"}, "content_hash": {"type": "string"},
+                            "focus_tag": {"type": "string", "description": "A lowercase tag (a-z0-9.+#- only, "
+                                         "at most 40 chars)"}},
+                           ["id", "content_hash", "focus_tag"])},
+    {"name": "pending_target_tags", "description": "Profiled skills with no `targets` values and no target tag "
+                    "yet, with name and description to judge one. Pages: pass `offset` for the next page.",
+     "inputSchema": schema(PAGE)},
+    {"name": "set_target_tag", "description": "Set a free-text target tag on a current profile whose `targets` "
+                    "list is empty, naming what it actually operates on when none of the fixed target values fit.",
+     "inputSchema": schema({"id": {"type": "string"}, "content_hash": {"type": "string"},
+                            "target_tag": {"type": "string", "description": "A lowercase tag (a-z0-9.+#- only, "
+                                          "at most 40 chars)"}},
+                           ["id", "content_hash", "target_tag"])},
     {"name": "status", "description": "Counts of skills, profiles, pending and overlapping categories.", "inputSchema": schema()},
     {"name": "audit", "description": "Task types where the user keeps passing over the top pick.", "inputSchema": schema()},
     {"name": "forget", "description": "Delete the local choice log. Pass confirm: true only after the user agreed.",
@@ -68,6 +95,14 @@ TOOLS = [
      "inputSchema": schema()},
     {"name": "hygiene", "description": "Suggest unused plugins and user/project skills to disable, with estimated context-token savings. Read-only.",
      "inputSchema": schema({"days": {"type": "integer", "minimum": hygiene.MIN_DAYS, "maximum": hygiene.MAX_DAYS}})},
+    {"name": "report_native_skills",
+     "description": "Report skills from this session's own skill listing that have no plugin prefix (Claude Code's "
+                    "built-ins among them: they ship inside the app, with no file for a disk scan to find). Pass "
+                    "every such entry's name and description; one already backed by a file is dropped, so this is "
+                    "safe to call with the full unprefixed list every time.",
+     "inputSchema": schema({"skills": {"type": "array", "maxItems": scan_claude.NATIVE_MAX,
+                                       "items": schema({"name": {"type": "string"}, "description": {"type": "string"}},
+                                                       ["name", "description"])}}, ["skills"])},
 ]
 
 
@@ -104,7 +139,10 @@ def call_tool(name: str, args: dict):
     if name == "pending_profiles":
         inv = inventory()
         return page(profiles.pending(inv), args, 15,
-                    lambda p: dict(p, source=inv[p["id"]]["source"], content_hash=inv[p["id"]]["content_hash"]))
+                    lambda p: dict(p, source=inv[p["id"]]["source"], content_hash=inv[p["id"]]["content_hash"],
+                                   description=inv[p["id"]].get("description")))
+    if name == "report_native_skills":
+        return {"recorded": scan_claude.report_native(args.get("skills"))}
     if name == "save_profile":
         errs = profiles.save(args.get("profile"), inventory())
         return {"saved": not errs, "errors": errs}
@@ -115,11 +153,37 @@ def call_tool(name: str, args: dict):
     if name == "set_role":
         errs = profiles.set_role(args.get("id"), args.get("content_hash"), args.get("role"), inventory())
         return {"saved": not errs, "errors": errs}
+    if name == "pending_domains":
+        inv = inventory()
+        pend = [dict(p, name=inv[p["id"]].get("name"), description=inv[p["id"]].get("description"))
+                for p in profiles.pending_domains(inv)]
+        return page(pend, args, 10)
+    if name == "set_domain":
+        errs = profiles.set_domain(args.get("id"), args.get("content_hash"), args.get("domain"), inventory())
+        return {"saved": not errs, "errors": errs}
+    if name == "pending_focus_tags":
+        inv = inventory()
+        pend = [dict(p, name=inv[p["id"]].get("name"), description=inv[p["id"]].get("description"))
+                for p in profiles.pending_focus_tags(inv)]
+        return page(pend, args, 10)
+    if name == "set_focus_tag":
+        errs = profiles.set_focus_tag(args.get("id"), args.get("content_hash"), args.get("focus_tag"), inventory())
+        return {"saved": not errs, "errors": errs}
+    if name == "pending_target_tags":
+        inv = inventory()
+        pend = [dict(p, name=inv[p["id"]].get("name"), description=inv[p["id"]].get("description"))
+                for p in profiles.pending_target_tags(inv)]
+        return page(pend, args, 10)
+    if name == "set_target_tag":
+        errs = profiles.set_target_tag(args.get("id"), args.get("content_hash"), args.get("target_tag"), inventory())
+        return {"saved": not errs, "errors": errs}
     if name == "status":
         inv, profs = inventory(), profiles.load_all()
         return {"skills": len(inv), "by_kind": dict(Counter(r.get("kind", "skill") for r in inv.values())),
                 "profiled": sum(1 for s in profs if s in inv),
-                "missing_role": len(profiles.pending_roles(inv)),
+                "missing_role": len(profiles.pending_roles(inv)), "missing_domain": len(profiles.pending_domains(inv)),
+                "missing_focus_tag": len(profiles.pending_focus_tags(inv)),
+                "missing_target_tag": len(profiles.pending_target_tags(inv)),
                 "pending": len(profiles.pending(inv)), "overlap_categories": route.overlap_categories(profs, inv),
                 "hygiene": hygiene_status(hygiene_report())}
     if name == "hygiene":
