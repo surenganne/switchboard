@@ -157,5 +157,5 @@ lists above), test layout.
 external resources, every skill id and source HTML-escaped (skill text is untrusted). It shows summary
 tiles, picks per week (up to 26 weeks), most chosen skills (chosen / offered), picks and overrides by
 category, the `audit` groups, and profiling coverage by source. Light and dark themes follow the system
-setting and use the Minfy blue and yellow palette. Same privacy rules as the rest of Switchboard: local only,
+setting and use a blue and yellow palette. Same privacy rules as the rest of Switchboard: local only,
 built only on request, no prompt text because none is stored.

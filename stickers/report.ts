@@ -5,7 +5,7 @@ import { brand, play } from './fun'
 import { calendar, folder, mailbox, pin, search, toggle, trophy } from './icons'
 
 const ICONS = { calendar, folder, mailbox, pin, search, toggle, trophy }
-const palette = brand('#1A3A5C', '#F9C642') // Minfy secondary blue on bodies, accent yellow on coins and checks
+const palette = brand('#1A3A5C', '#F9C642') // blue on bodies, yellow on coins and checks
 
 document.querySelectorAll<HTMLCanvasElement>('canvas[data-sticker]').forEach((c, i) => {
   const icon = ICONS[c.dataset.sticker as keyof typeof ICONS]

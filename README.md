@@ -17,6 +17,17 @@ front of you, it shows you the best two or three, each with a one-line reason, a
   language (a Kotlin reviewer on a Python task) rank below those that fit any stack.
 - **Local only.** No network, no API keys, no telemetry. Python 3 standard library.
 
+You ask *"review this PR before I merge it"*, and three code reviewers are installed:
+
+```
+Several installed skills fit this. Which one?
+
+  1. review (recommended)       Pre-landing PR review for SQL safety, trust boundaries and side effects.
+                                You chose this last time.
+  2. ecc:code-review            Broad quality, security and maintainability pass over the diff.
+  3. ponytail:ponytail-review   Flags over-engineering and code that should not exist.
+```
+
 ![How Switchboard works: scan, profile, route, pick, learn](docs/images/workflow.svg)
 
 ## Contents
@@ -312,6 +323,8 @@ python3 -m unittest discover -s tests -t .
 ```
 
 The README images are exported SVGs in `docs/images/`; their editable HTML sources are in `docs/diagrams/`.
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
