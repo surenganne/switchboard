@@ -27,6 +27,19 @@ class HooksTest(unittest.TestCase):
         os.environ.pop("SWITCHBOARD_HOME", None)
         self.tmp.cleanup()
 
+    def test_enforce_mode_defaults_to_skills(self):
+        from switchboard import paths
+        self.assertEqual(paths.enforce_mode(), "skills")
+        for raw in ("{not json", '{"enforce": "loud"}', "[1]"):
+            (paths.home() / "settings.json").write_text(raw)
+            self.assertEqual(paths.enforce_mode(), "skills", raw)
+
+    def test_enforce_mode_reads_valid_values(self):
+        from switchboard import paths
+        for v in ("off", "primary"):
+            (paths.home() / "settings.json").write_text(json.dumps({"enforce": v}))
+            self.assertEqual(paths.enforce_mode(), v)
+
     def run_hook(self, script, stdin):
         p = subprocess.run([sys.executable, str(ROOT / "switchboard" / script)], input=stdin, text=True,
                            capture_output=True, env=self.env, timeout=10)
