@@ -234,6 +234,25 @@ class HooksTest(unittest.TestCase):
         self.pretool(ROUTE_TOOL.replace("__route", "__record_choice"), {"chosen": "ecc:code-review"}, sid="s2")
         self.assertIsNone(self.reminder(self.prompt("review my diff", sid="s2")))
 
+    def pending(self, sid="s1"):
+        return json.loads((self.sb / "state" / f"{sid}.json").read_text()).get("pending")
+
+    def test_prompt_sets_pending_when_reminding(self):
+        self.seed_review_profiles()
+        self.assertIsNotNone(self.reminder(self.prompt("review this PR")))
+        self.assertEqual(self.pending(), ["code-review"])
+        for f in (self.sb / "state").glob("*.json"):
+            self.assertNotIn("PR", f.read_text())  # area names only, never prompt text
+        self.prompt("what time is it")  # a stale pending must not gate unrelated later work
+        self.assertEqual(self.pending(), [])
+
+    def test_prompt_named_skill_clears_pending(self):
+        self.seed_review_profiles()
+        self.prompt("review this PR")
+        self.assertEqual(self.pending(), ["code-review"])
+        self.prompt("review this with /ecc:code-review")
+        self.assertEqual(self.pending(), [])
+
     def test_prompt_areas_cover_everyday_task_wording(self):
         from switchboard import hook_prompt
         areas = lambda p: {a for a, rx in hook_prompt.AREA_RE.items() if rx.search(p)}
