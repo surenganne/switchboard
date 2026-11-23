@@ -18,6 +18,8 @@ FULL_TAGS = 3  # a field with more tags than this is discounted
 COST_RANK = {"single-pass": 0, "multi-agent": 1, "workflow": 2}  # tie-break: the lighter skill first
 NEXT = ("Pick the 2–3 candidates whose best_for/not_for fit this task best and ask the user with AskUserQuestion "
         "(one option per candidate, reason in its description, a past choice as a label), then call record_choice. "
+        "Also include a \"No skill, do it directly\" option; if the user picks it, call record_choice with "
+        "chosen=\"direct\" and do the task yourself. "
         "If only one fits clearly, call record_choice with it and say which. Run the pick with its `invoke` "
         "(an agent starts with the Agent tool, not the Skill tool).")
 

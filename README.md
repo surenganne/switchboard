@@ -64,7 +64,7 @@ some are waiting.
 |---|---|---|
 | **1 · Scan** | Switchboard | At session start, a hook lists your user, project and enabled-plugin skills, commands and agents (subagents), and fingerprints each one (a skill's main file plus every `.md` in its folder; a command's or agent's own file). |
 | **2 · Profile** | Claude | `/switchboard:profile` has Claude fill a fixed schema per skill. A validator accepts only known fields, values from fixed lists and short text, so a skill's own text cannot steer the router. |
-| **3 · Route** | Claude + Switchboard | Before Claude uses a skill in a task area where several profiled skills overlap, it describes the task (category, role, targets, focus, stack) to the local `route` tool. Skills whose role matches the task (`performs` by default; `assists` for help around a task, such as answering review comments) rank first, then by how much of the task each covers. `route` returns up to 10 candidates, each with its kind and how to start it (the Skill tool, or the Agent tool for an agent), and tells Claude to offer the best 2–3 with AskUserQuestion. If Claude skips routing or asking, a hook blocks the skill until a choice is recorded (at most twice per 10 minutes, so it never gets stuck). Agent calls are never blocked, since skills start agents mid-workflow; they are only logged for hygiene. When your prompt looks like work in an overlapping area (review, debugging, tests, new features, refactors, release…), a prompt hook also reminds Claude to route even if it was about to do the work without a skill; the prompt is matched in memory and never stored. |
+| **3 · Route** | Claude + Switchboard | Before Claude uses a skill in a task area where several profiled skills overlap, it describes the task (category, role, targets, focus, stack) to the local `route` tool. Skills whose role matches the task (`performs` by default; `assists` for help around a task, such as answering review comments) rank first, then by how much of the task each covers. `route` returns up to 10 candidates, each with its kind and how to start it (the Skill tool, or the Agent tool for an agent), and tells Claude to offer the best 2–3 with AskUserQuestion. If Claude skips routing or asking, a hook blocks the skill until a choice is recorded (at most twice per 10 minutes, so it never gets stuck). By default Agent calls are not blocked, since skills start agents mid-workflow; they are only logged for hygiene (see `enforce` below for `primary` mode). When your prompt looks like work in an overlapping area (review, debugging, tests, new features, refactors, release…), a prompt hook also reminds Claude to route even if it was about to do the work without a skill; the prompt is matched in memory and never stored. |
 | **4 · Pick** | You | Claude shows the top two or three with a one-line reason each, and you choose. |
 | **5 · Learn** | Switchboard | Your pick is logged locally, shown as a label on similar tasks later, and feeds `/switchboard:audit` and the activity report. |
 
@@ -74,6 +74,22 @@ hook notes the names you typed, and the routing reminder lets those skills strai
 **When a plugin updates,** the fingerprint of any skill whose text changed no longer matches its profile.
 That skill is marked as changed, the next session start offers `/switchboard:profile`, and only the
 changed skills are re-profiled. A version bump that leaves a skill's text alone does not trigger anything.
+
+### The `enforce` setting
+
+`enforce` in `~/.switchboard/settings.json` (or `$SWITCHBOARD_HOME/settings.json`) sets how much Switchboard holds back until routing has happened:
+
+| Value | Effect |
+|---|---|
+| `"off"` | No gating; the reminder hook still runs. |
+| `"skills"` (default) | Only the Skill tool is gated, as described above. Unknown or invalid values fall back to this. |
+| `"primary"` | Also gates the first `Edit`, `Write`, `NotebookEdit` and `Agent`/`Task` call, when your prompt touched a task area where several installed skills overlap, until a choice is recorded. |
+
+```json
+{"enforce": "primary"}
+```
+
+In `primary` mode the gate holds until `record_choice` is called, then stays quiet until a later prompt touches an overlap area again. `record_choice` also accepts `direct`: you declined every skill and Claude does the work itself. It counts as a recorded choice and is not counted as an override in `/switchboard:audit`. The cap is the same as for skills: at most 2 denials per session per 10 minutes, so an agent that cannot ask you is never stuck. `Read`, `Grep`, `Glob` and `Bash` are never gated, nor is any `Edit`, `Write` or `NotebookEdit` under `~/.switchboard`, so you can always turn this off through Claude. Skills you typed as `/name` are never gated.
 
 ## Commands
 
@@ -150,7 +166,7 @@ Several installed skills fit this. Which one?
 ```
 
 Your answer is appended to `~/.switchboard/choices.jsonl` as one line of task features and skill ids,
-never your prompt:
+never your prompt (`chosen` is the skill id, or the literal `direct` when you declined every skill):
 
 ```json
 {"date": "2026-11-12", "category": "code-review", "targets": ["pr"], "focus": ["correctness", "security"], "stack": ["python"], "depth": null, "cost": null, "offered": ["user:review", "ecc:code-review", "ponytail:ponytail-review"], "chosen": "user:review"}
@@ -262,8 +278,8 @@ Everything lives in `~/.switchboard/`. Directories are mode 0700 and files 0600.
 |---|---|
 | `inventory.json` | Installed skill ids, names, paths, descriptions, hashes |
 | `profiles/*.json` | One profile per skill |
-| `choices.jsonl` | Per pick: date, task features (category, targets, focus, stack, depth, cost, role), skills offered, skill chosen |
-| `state/` | Per session: reminder-hook timestamps and the skill names you typed as `/name` (names only, never the message); deleted after a day |
+| `choices.jsonl` | Per pick: date, task features (category, targets, focus, stack, depth, cost, role), skills offered, skill chosen (or the literal `direct`) |
+| `state/` | Per session: reminder-hook timestamps, the skill names you typed as `/name`, pending area names, and deny and choice timestamps (names and timestamps only, never the message); deleted after a day |
 | `report.html` | The latest activity report, written only when you run `/switchboard:report` |
 | `last_offer.json` | A hash of the unprofiled-skill list, so you are offered profiling only when it changes |
 | `usage.jsonl` | Per skill use: date and installed skill id only (anything that is not an installed skill id is dropped) |
@@ -274,8 +290,13 @@ No prompt text and no code are stored. Feature fields keep only values from the 
 recording, create `~/.switchboard/settings.json` with `{"record_choices": false}` and/or
 `{"record_usage": false}`. Past session transcripts are never read.
 
-## Limits in v0.7
+## Limits in v0.8
 
+- `primary` mode cannot force Claude to call Switchboard; it only holds other actions until routing has happened.
+- Claude can turn `primary` mode off by editing `~/.switchboard/settings.json`, which is exempt from the gate by design.
+- Area detection is a keyword guess, so a prompt that matches no area is never gated.
+- `Bash` is not gated (it cannot tell a read from a write), so a shell command that writes files is not caught.
+- Other plugins' hooks run independently and in no guaranteed order. With a second gate (for example ECC's GateGuard) you get two prompts.
 - Claude Code only. The scanner sits behind a small interface (`list_skills`) so other platforms can follow.
 - Built-in Claude Code skills (such as `code-review` and `simplify`) have no files on disk, so the scanner
   can't find them by itself. `/switchboard:profile` now reports them from the session's own skill listing

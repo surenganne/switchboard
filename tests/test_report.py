@@ -39,6 +39,14 @@ class ReportTest(unittest.TestCase):
         self.assertEqual(s["weeks"], [("2026-W45", 2), ("2026-W46", 1)])
         self.assertEqual(s["by_category"], [("code-review", 3, 2)])
 
+    def test_direct_is_neither_a_top_skill_nor_an_override(self):
+        from switchboard import choices
+        s = report.summarise(INV, PROFS, ROWS + [row("2026-11-12", "direct")])
+        self.assertEqual((s["picks"], s["overrides"]), (3, 2))
+        self.assertEqual(sum(a["overrides"] for a in s["audit"]), s["overrides"])
+        self.assertNotIn("direct", [t[0] for t in s["top_skills"]])
+        self.assertEqual(s["by_category"], [("code-review", 3, 2)])
+
     def test_profiled_skills_table(self):
         s = report.summarise(INV, PROFS, ROWS)
         self.assertEqual(s["profiled_skills"], [("ecc:code-review", "code-review, security", "", 2, 3, True, "skill"),

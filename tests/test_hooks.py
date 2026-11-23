@@ -27,6 +27,19 @@ class HooksTest(unittest.TestCase):
         os.environ.pop("SWITCHBOARD_HOME", None)
         self.tmp.cleanup()
 
+    def test_enforce_mode_defaults_to_skills(self):
+        from switchboard import paths
+        self.assertEqual(paths.enforce_mode(), "skills")
+        for raw in ("{not json", '{"enforce": "loud"}', "[1]"):
+            (paths.home() / "settings.json").write_text(raw)
+            self.assertEqual(paths.enforce_mode(), "skills", raw)
+
+    def test_enforce_mode_reads_valid_values(self):
+        from switchboard import paths
+        for v in ("off", "primary"):
+            (paths.home() / "settings.json").write_text(json.dumps({"enforce": v}))
+            self.assertEqual(paths.enforce_mode(), v)
+
     def run_hook(self, script, stdin):
         p = subprocess.run([sys.executable, str(ROOT / "switchboard" / script)], input=stdin, text=True,
                            capture_output=True, env=self.env, timeout=10)
@@ -111,6 +124,12 @@ class HooksTest(unittest.TestCase):
         self.assertIn("route", out["hookSpecificOutput"]["permissionDecisionReason"])
         self.assertTrue(self.deny(self.pretool("Skill", {"skill": "ecc:code-review"})))
         self.assertIsNone(self.pretool("Skill", {"skill": "ecc:code-review"}))  # capped: never stuck
+
+    def test_off_mode_never_denies_skills(self):
+        self.seed_review_profiles()
+        (self.sb / "settings.json").write_text(json.dumps({"enforce": "off"}))
+        for _ in range(4):
+            self.assertIsNone(self.pretool("Skill", {"skill": "ecc:code-review"}))
 
     def test_pretool_cap_is_per_session_not_per_skill(self):
         self.seed_review_profiles()
@@ -221,6 +240,25 @@ class HooksTest(unittest.TestCase):
         self.pretool(ROUTE_TOOL.replace("__route", "__record_choice"), {"chosen": "ecc:code-review"}, sid="s2")
         self.assertIsNone(self.reminder(self.prompt("review my diff", sid="s2")))
 
+    def pending(self, sid="s1"):
+        return json.loads((self.sb / "state" / f"{sid}.json").read_text()).get("pending")
+
+    def test_prompt_sets_pending_when_reminding(self):
+        self.seed_review_profiles()
+        self.assertIsNotNone(self.reminder(self.prompt("review this PR")))
+        self.assertEqual(self.pending(), ["code-review"])
+        for f in (self.sb / "state").glob("*.json"):
+            self.assertNotIn("PR", f.read_text())  # area names only, never prompt text
+        self.prompt("what time is it")  # a stale pending must not gate unrelated later work
+        self.assertEqual(self.pending(), [])
+
+    def test_prompt_named_skill_clears_pending(self):
+        self.seed_review_profiles()
+        self.prompt("review this PR")
+        self.assertEqual(self.pending(), ["code-review"])
+        self.prompt("review this with /ecc:code-review")
+        self.assertEqual(self.pending(), [])
+
     def test_prompt_areas_cover_everyday_task_wording(self):
         from switchboard import hook_prompt
         areas = lambda p: {a for a, rx in hook_prompt.AREA_RE.items() if rx.search(p)}
@@ -243,7 +281,9 @@ class HooksTest(unittest.TestCase):
 
     def test_hooks_json_matches_record_choice(self):
         hooks = json.loads((Path(__file__).parent.parent / "hooks/hooks.json").read_text())
-        self.assertIn(ROUTE_TOOL.replace("__route", "__record_choice"), hooks["hooks"]["PreToolUse"][0]["matcher"])
+        matcher = hooks["hooks"]["PreToolUse"][0]["matcher"]
+        self.assertIn(ROUTE_TOOL.replace("__route", "__record_choice"), matcher)
+        self.assertTrue({"Edit", "Write", "NotebookEdit"} <= set(matcher.split("|")))
 
     def test_pretool_logs_agent_calls_and_never_blocks_them(self):
         from switchboard import profiles, scan_claude
@@ -262,6 +302,78 @@ class HooksTest(unittest.TestCase):
         self.assertTrue(self.deny(self.pretool("Skill", {"skill": "ecc:code-review"})))  # skills still routed
         hooks = json.loads((ROOT / "hooks/hooks.json").read_text())
         self.assertTrue({"Agent", "Task", "Skill"} <= set(hooks["hooks"]["PreToolUse"][0]["matcher"].split("|")))
+
+    def primary(self, mode="primary", **state):
+        from switchboard import paths
+        paths.home().mkdir(parents=True, exist_ok=True)
+        (paths.home() / "settings.json").write_text(json.dumps({"enforce": mode}))
+        sf = paths.session_state("s1")
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(json.dumps(dict({"pending": ["code-review"]}, **state)))
+
+    def test_primary_denies_first_edit_while_pending(self):
+        self.primary()
+        out = self.pretool("Edit", {"file_path": str(self.root / "a.py")})
+        self.assertTrue(self.deny(out))
+        self.assertIn("record_choice", out["hookSpecificOutput"]["permissionDecisionReason"])
+        self.assertLess(len(out["hookSpecificOutput"]["permissionDecisionReason"]), 400)
+
+    def test_primary_allows_edit_after_choice_or_direct(self):
+        self.primary()
+        self.pretool(ROUTE_TOOL.replace("__route", "__record_choice"), {"chosen": "direct"})
+        self.assertIsNone(self.pretool("Edit", {"file_path": str(self.root / "a.py")}))
+        self.primary(chosen_at=time.time() - 5000)  # stale choice no longer counts
+        self.assertTrue(self.deny(self.pretool("Write", {"file_path": str(self.root / "a.py")})))
+
+    def test_primary_record_choice_clears_pending_so_later_edits_pass(self):
+        from switchboard import paths
+        self.primary()
+        self.pretool(ROUTE_TOOL.replace("__route", "__record_choice"), {"chosen": "direct"})
+        sf = paths.session_state("s1")
+        state = json.loads(sf.read_text())
+        self.assertEqual(state["pending"], [])
+        state["chosen_at"] = time.time() - 5000  # window long gone
+        sf.write_text(json.dumps(state))
+        self.assertIsNone(self.pretool("Edit", {"file_path": str(self.root / "a.py")}))
+
+    def test_primary_denies_sibling_prefix_dir_of_home(self):
+        self.primary()
+        self.assertTrue(self.deny(self.pretool("Edit", {"file_path": str(self.sb) + "X/a.py"})))
+
+    def test_primary_denies_agent_while_pending(self):
+        self.primary()
+        self.assertTrue(self.deny(self.pretool("Agent", {"subagent_type": "general-purpose"})))
+        self.primary("skills")
+        self.assertIsNone(self.pretool("Agent", {"subagent_type": "general-purpose"}))
+
+    def test_primary_gate_is_capped(self):
+        self.primary()
+        self.assertTrue(self.deny(self.pretool("Edit", {"file_path": "x"})))
+        self.assertTrue(self.deny(self.pretool("Task", {})))
+        self.assertIsNone(self.pretool("NotebookEdit", {"notebook_path": "x.ipynb"}))
+
+    def test_primary_never_gates_edits_under_switchboard_home(self):
+        self.primary()
+        self.assertIsNone(self.pretool("Edit", {"file_path": str(self.sb / "settings.json")}))
+        self.assertIsNone(self.pretool("NotebookEdit", {"notebook_path": str(self.sb / "n.ipynb")}))
+        # `..` cannot fake the exemption
+        self.assertTrue(self.deny(self.pretool("Edit", {"file_path": str(self.sb / ".." / "other.py")})))
+
+    def test_skills_and_off_modes_never_gate_edits(self):
+        for mode in ("skills", "off"):
+            self.primary(mode)
+            for tool in ("Edit", "Write", "NotebookEdit"):
+                self.assertIsNone(self.pretool(tool, {"file_path": str(self.root / "a.py")}), mode)
+
+    def test_primary_ignores_read_only_tools(self):
+        self.primary()
+        for tool, inp in (("Read", {"file_path": "x"}), ("Bash", {"command": "ls"}), ("Grep", {"pattern": "x"})):
+            self.assertIsNone(self.pretool(tool, inp))
+
+    def test_primary_does_not_gate_when_nothing_pending_or_state_missing(self):
+        self.primary(pending=[])
+        self.assertIsNone(self.pretool("Edit", {"file_path": "x"}))
+        self.assertIsNone(self.pretool("Edit", {"file_path": "x"}, sid="fresh"))
 
     def test_pretool_allows_non_overlap_skill(self):
         self.seed_review_profiles()

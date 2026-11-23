@@ -76,6 +76,12 @@ class ChoicesTest(unittest.TestCase):
         (g,) = choices.audit()
         self.assertEqual((g["overrides"], g["chosen"]), (2, ["b:y"]))
 
+    def test_audit_ignores_direct_overrides(self):
+        for _ in range(3):
+            choices.record(TASK, ["a:x", "b:y"], choices.DIRECT, known={"a:x", "b:y"})
+        self.assertEqual(self.lines()[0]["chosen"], "direct")
+        self.assertEqual(choices.audit(), [])
+
     def test_forget_clears(self):
         choices.record(TASK, ["a:x"], "a:x")
         choices.record(TASK, ["a:x"], "a:x")

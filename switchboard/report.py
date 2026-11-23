@@ -27,10 +27,10 @@ def _week(d: date) -> str:
 
 
 def _picks(rows):
-    """Rows that record a real pick: a valid date and a chosen id."""
+    """Rows that record a real pick: a valid date and a chosen id (`direct` is no skill, so not a pick)."""
     out = []
     for r in rows:
-        if not isinstance(r, dict) or not isinstance(r.get("chosen"), str):
+        if not isinstance(r, dict) or not isinstance(r.get("chosen"), str) or r["chosen"] == choices.DIRECT:
             continue
         try:
             d = datetime.strptime(str(r.get("date")), "%Y-%m-%d").date()

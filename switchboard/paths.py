@@ -1,5 +1,6 @@
 """Private data directory for Switchboard (~/.switchboard, or $SWITCHBOARD_HOME)."""
 import hashlib
+import json
 import os
 import re
 from pathlib import Path
@@ -10,6 +11,15 @@ def home() -> Path:
     p.mkdir(mode=0o700, parents=True, exist_ok=True)
     p.chmod(0o700)
     return p
+
+
+def enforce_mode() -> str:
+    """settings.json "enforce": off, skills (default) or primary. Never raises."""
+    try:
+        v = json.loads((home() / "settings.json").read_text()).get("enforce")
+    except (OSError, ValueError, AttributeError):
+        return "skills"
+    return v if v in ("off", "skills", "primary") else "skills"
 
 
 def session_state(session_id) -> Path:

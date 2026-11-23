@@ -41,16 +41,16 @@ try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from switchboard import paths, profiles, route, scan_claude, usage
 
-    def remind(prompt, state, now):
+    def overlap_areas(prompt, state, now):
+        """Overlap areas the prompt touches and that still need a routing choice; [] when none."""
         # only a recorded choice quiets it: a reminder Claude ignored must not silence the next prompts
         if now - float(state.get("chosen_at", 0)) <= WINDOW:
-            return None
+            return []
         areas = [a for a, rx in AREA_RE.items() if rx.search(prompt)]
         if not areas:
-            return None
+            return []
         overlap = set(route.overlap_categories(profiles.load_all(), scan_claude.current(hashed=False)))
-        areas = [a for a in areas if a in overlap]
-        return REMIND.format(areas=", ".join(areas)) if areas else None
+        return [a for a in areas if a in overlap]
 
     def main():
         now = time.time()
@@ -59,13 +59,17 @@ try:
         names = {n for n in NAME.findall(prompt) if len(n) <= 100}
         sf = paths.session_state(event["session_id"])
         state = json.loads(sf.read_text()) if sf.exists() else {}
-        msg = None if names else remind(prompt, state, now)
+        areas = [] if names else overlap_areas(prompt, state, now)
         if names:
             if usage.recording_on():
                 usage.record(sorted(usage.resolve_ids(names)))
             state["named"] = sorted(set(state.get("named") or []) | names)[:MAX_NAMES]
+        # recomputed on every prompt (area names only) so a stale value never gates later unrelated work
+        if names or areas != state.get("pending", []):
+            state["pending"] = areas
             paths.write_private(sf, json.dumps(state))
-        if msg:
+        if areas:
+            msg = REMIND.format(areas=", ".join(areas))
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": msg}}))
 
     if __name__ == "__main__":  # importable so tests can check AREA_RE
