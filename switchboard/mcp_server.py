@@ -12,7 +12,7 @@ from datetime import date  # noqa: E402
 
 from switchboard import choices, hygiene, profiles, report, route, scan_claude, usage  # noqa: E402
 
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")  # newest first; the subset this server speaks
 OBJ = {"type": "object"}
 STRS = {"type": "array", "items": {"type": "string"}}
