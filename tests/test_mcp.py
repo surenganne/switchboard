@@ -161,6 +161,12 @@ class McpTest(unittest.TestCase):
         rows = [json.loads(x) for x in log.read_text().splitlines()]
         self.assertEqual([r["chosen"] for r in rows], ["user:alpha"])  # the unknown pick wrote nothing
 
+    def test_record_choice_accepts_direct(self):
+        log = Path(self.tmp.name) / "sbhome" / "choices.jsonl"
+        err, ok = self.call("record_choice", task={"category": "code-review"}, offered=["user:alpha"], chosen="direct")
+        self.assertEqual((err, ok), (False, {"recorded": True, "chosen": "direct"}))
+        self.assertEqual([json.loads(x)["chosen"] for x in log.read_text().splitlines()], ["direct"])
+
     def test_initialize_does_not_claim_unknown_protocol_version(self):
         got = self.rpc("initialize", {"protocolVersion": "2099-01-01"})["result"]["protocolVersion"]
         self.assertNotEqual(got, "2099-01-01")

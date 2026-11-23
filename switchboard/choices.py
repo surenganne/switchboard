@@ -11,6 +11,8 @@ from datetime import date
 
 from switchboard import paths, profiles
 
+DIRECT = "direct"  # chosen value for "no skill, do it directly"
+
 FEATURES = ("category", "targets", "focus", "stack", "depth", "cost", "role")
 
 
@@ -50,7 +52,7 @@ def record(task: dict, offered: list[str], chosen: str, known=None) -> None:
     ok = lambda x: isinstance(x, str) and len(x) <= 200 and (known is None or x in known)
     row = dict(features(task), date=date.today().isoformat(),
                offered=[x for x in (offered if isinstance(offered, list) else []) if ok(x)][:10],
-               chosen=chosen if ok(chosen) else None)
+               chosen=chosen if chosen == DIRECT or ok(chosen) else None)
     log = _log()
     if not log.exists():
         paths.write_private(log, "")
@@ -102,7 +104,8 @@ def audit_rows(log: list) -> list[dict]:
         if not isinstance(row, dict):
             continue
         offered = row.get("offered") or []
-        if offered and isinstance(row.get("chosen"), str) and row["chosen"] != offered[0]:
+        if offered and isinstance(row.get("chosen"), str) \
+                and row["chosen"] not in (DIRECT, offered[0]):
             key = (row.get("category"), tuple(sorted(row.get("targets") or [])), tuple(sorted(row.get("focus") or [])))
             groups[key].append(row.get("chosen"))
     return [{"category": c, "targets": list(t), "focus": list(f), "overrides": len(picked), "chosen": sorted(set(picked))}

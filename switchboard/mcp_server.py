@@ -129,10 +129,10 @@ def call_tool(name: str, args: dict):
     if name == "record_choice":
         known = set(inventory())
         chosen = args.get("chosen")
-        if isinstance(chosen, str) and chosen not in known:  # a bare skill name maps to its id when unambiguous
+        if isinstance(chosen, str) and chosen != choices.DIRECT and chosen not in known:  # a bare skill name maps to its id when unambiguous
             matches = [sid for sid in known if sid.rsplit(":", 1)[-1] == chosen]
             chosen = matches[0] if len(matches) == 1 else chosen
-        if chosen not in known:
+        if chosen != choices.DIRECT and chosen not in known:
             return {"recorded": False, "error": "chosen: not an installed skill id (pass the full id, e.g. user:review)"}
         choices.record(args.get("task") or {}, args.get("offered") or [], chosen, known=known)
         return {"recorded": True, "chosen": chosen}
