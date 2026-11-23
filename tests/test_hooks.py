@@ -125,6 +125,12 @@ class HooksTest(unittest.TestCase):
         self.assertTrue(self.deny(self.pretool("Skill", {"skill": "ecc:code-review"})))
         self.assertIsNone(self.pretool("Skill", {"skill": "ecc:code-review"}))  # capped: never stuck
 
+    def test_off_mode_never_denies_skills(self):
+        self.seed_review_profiles()
+        (self.sb / "settings.json").write_text(json.dumps({"enforce": "off"}))
+        for _ in range(4):
+            self.assertIsNone(self.pretool("Skill", {"skill": "ecc:code-review"}))
+
     def test_pretool_cap_is_per_session_not_per_skill(self):
         self.seed_review_profiles()
         self.assertTrue(self.deny(self.pretool("Skill", {"skill": "ecc:code-review"})))

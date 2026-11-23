@@ -166,7 +166,7 @@ Several installed skills fit this. Which one?
 ```
 
 Your answer is appended to `~/.switchboard/choices.jsonl` as one line of task features and skill ids,
-never your prompt:
+never your prompt (`chosen` is the skill id, or the literal `direct` when you declined every skill):
 
 ```json
 {"date": "2026-11-12", "category": "code-review", "targets": ["pr"], "focus": ["correctness", "security"], "stack": ["python"], "depth": null, "cost": null, "offered": ["user:review", "ecc:code-review", "ponytail:ponytail-review"], "chosen": "user:review"}
@@ -278,8 +278,8 @@ Everything lives in `~/.switchboard/`. Directories are mode 0700 and files 0600.
 |---|---|
 | `inventory.json` | Installed skill ids, names, paths, descriptions, hashes |
 | `profiles/*.json` | One profile per skill |
-| `choices.jsonl` | Per pick: date, task features (category, targets, focus, stack, depth, cost, role), skills offered, skill chosen |
-| `state/` | Per session: reminder-hook timestamps and the skill names you typed as `/name` (names only, never the message); deleted after a day |
+| `choices.jsonl` | Per pick: date, task features (category, targets, focus, stack, depth, cost, role), skills offered, skill chosen (or the literal `direct`) |
+| `state/` | Per session: reminder-hook timestamps, the skill names you typed as `/name`, pending area names, and deny and choice timestamps (names and timestamps only, never the message); deleted after a day |
 | `report.html` | The latest activity report, written only when you run `/switchboard:report` |
 | `last_offer.json` | A hash of the unprofiled-skill list, so you are offered profiling only when it changes |
 | `usage.jsonl` | Per skill use: date and installed skill id only (anything that is not an installed skill id is dropped) |
@@ -293,6 +293,7 @@ recording, create `~/.switchboard/settings.json` with `{"record_choices": false}
 ## Limits in v0.8
 
 - `primary` mode cannot force Claude to call Switchboard; it only holds other actions until routing has happened.
+- Claude can turn `primary` mode off by editing `~/.switchboard/settings.json`, which is exempt from the gate by design.
 - Area detection is a keyword guess, so a prompt that matches no area is never gated.
 - `Bash` is not gated (it cannot tell a read from a write), so a shell command that writes files is not caught.
 - Other plugins' hooks run independently and in no guaranteed order. With a second gate (for example ECC's GateGuard) you get two prompts.

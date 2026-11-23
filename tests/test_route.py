@@ -40,6 +40,7 @@ class RouteTest(unittest.TestCase):
         self.assertTrue(r["overlap"])
         self.assertIn("AskUserQuestion", r["next"])
         self.assertIn("record_choice", r["next"])
+        self.assertIn("direct", r["next"])
         empty = route.route({"category": "docs"}, FIX["profiles"], FIX["inventory"], [])
         self.assertEqual(empty["candidates"], [])
         self.assertNotIn("next", empty)
