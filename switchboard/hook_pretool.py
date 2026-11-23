@@ -4,6 +4,7 @@ MAX_DENIES blocks per session per 10 minutes, so an agent that cannot ask the us
 Skills the user named with /<skill> in this session are never blocked (see hook_prompt.py).
 Fails open: any problem means print nothing, exit 0."""
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -12,6 +13,10 @@ WINDOW = 600
 AGENT_TOOLS = ("Agent", "Task")  # Task: the Agent tool's name in older Claude Code versions
 SKILL_KINDS = ("skill", "command")
 MAX_DENIES = 2  # one before route, one after route without a recorded choice
+MUTATING = ("Edit", "Write", "NotebookEdit")
+REASON_PRIMARY = ("Switchboard primary mode: route first (route tool), offer the user the top 2-3 with AskUserQuestion "
+                  "including a \"No skill, do it directly\" option, then call record_choice "
+                  "(chosen \"direct\" if the user declines every skill).")
 REASON = ("Switchboard: several installed skills fit this kind of task. Call the switchboard route tool first, "
           "then offer the user the top 2–3 with AskUserQuestion and call record_choice.")
 REASON_ROUTED = ("Switchboard: route was called but no choice was recorded. Offer the user the top 2–3 candidates "
@@ -35,6 +40,33 @@ try:
         return {pid for pid in profs if pid == f"user:{skill}"
                 or (pid.startswith("project:") and pid.split(":", 2)[-1] == skill)}
 
+    def gate(tool, tool_input, state, now):
+        """True when primary mode must deny this call: work is pending routing and no choice was recorded lately."""
+        if tool not in MUTATING and tool not in AGENT_TOOLS:
+            return False
+        if not (state.get("pending") or []) or now - float(state.get("chosen_at", 0)) <= WINDOW:
+            return False
+        if tool in MUTATING:  # never block edits to Switchboard's own settings, or the user cannot switch it off
+            home = os.path.realpath(str(paths.home()))
+            for key in ("file_path", "notebook_path"):
+                target = (tool_input or {}).get(key)
+                if target and os.path.commonpath([home, os.path.realpath(str(target))]) == home:
+                    return False
+        return True
+
+    def deny_gated(event, tool, state, sf, now):
+        """Shared MAX_DENIES counter; prints the denial. Returns True when it denied."""
+        if not gate(tool, event.get("tool_input") or {}, state, now):
+            return False
+        denies = [t for t in state.get("denies") or [] if now - float(t) <= WINDOW]
+        if len(denies) >= MAX_DENIES:
+            return False
+        state["denies"] = denies + [now]
+        paths.write_private(sf, json.dumps(state))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                                 "permissionDecisionReason": REASON_PRIMARY}}))
+        return True
+
     def main():
         now = time.time()
         event = json.loads(sys.stdin.read())
@@ -44,6 +76,8 @@ try:
         if "switchboard" in tool and tool.endswith(("__route", "__record_choice")):
             state["routed_at" if tool.endswith("__route") else "chosen_at"] = now
             paths.write_private(sf, json.dumps(state))
+            return
+        if paths.enforce_mode() == "primary" and deny_gated(event, tool, state, sf, now):
             return
         if tool in AGENT_TOOLS:  # logged for hygiene, never blocked: skills start agents mid-workflow
             if usage.recording_on():
