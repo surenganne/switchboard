@@ -1,4 +1,4 @@
-"""PreToolUse hook on Skill and Agent. Agent calls are only logged for hygiene. On Skill: when several profiled skills fit that kind of task and no choice was recorded
+"""PreToolUse hook on Skill and Agent. Agent calls are only logged for hygiene, except in primary mode while routing is pending. On Skill: when several profiled skills fit that kind of task and no choice was recorded
 in the last 10 minutes, block and ask Claude to route, ask the user and call `record_choice`. At most
 MAX_DENIES blocks per session per 10 minutes, so an agent that cannot ask the user is never stuck.
 Skills the user named with /<skill> in this session are never blocked (see hook_prompt.py).
@@ -75,11 +75,13 @@ try:
         state = json.loads(sf.read_text()) if sf.exists() else {}
         if "switchboard" in tool and tool.endswith(("__route", "__record_choice")):
             state["routed_at" if tool.endswith("__route") else "chosen_at"] = now
+            if tool.endswith("__record_choice"):
+                state["pending"] = []  # routed for this task: do not gate again once WINDOW passes
             paths.write_private(sf, json.dumps(state))
             return
         if paths.enforce_mode() == "primary" and deny_gated(event, tool, state, sf, now):
             return
-        if tool in AGENT_TOOLS:  # logged for hygiene, never blocked: skills start agents mid-workflow
+        if tool in AGENT_TOOLS:  # only logged, except in primary mode while routing is pending (gated above): skills start agents mid-workflow
             if usage.recording_on():
                 usage.record(usage.resolve_ids([str((event.get("tool_input") or {}).get("subagent_type") or "")],
                                                kinds=("agent",)))

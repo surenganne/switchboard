@@ -319,6 +319,21 @@ class HooksTest(unittest.TestCase):
         self.primary(chosen_at=time.time() - 5000)  # stale choice no longer counts
         self.assertTrue(self.deny(self.pretool("Write", {"file_path": str(self.root / "a.py")})))
 
+    def test_primary_record_choice_clears_pending_so_later_edits_pass(self):
+        from switchboard import paths
+        self.primary()
+        self.pretool(ROUTE_TOOL.replace("__route", "__record_choice"), {"chosen": "direct"})
+        sf = paths.session_state("s1")
+        state = json.loads(sf.read_text())
+        self.assertEqual(state["pending"], [])
+        state["chosen_at"] = time.time() - 5000  # window long gone
+        sf.write_text(json.dumps(state))
+        self.assertIsNone(self.pretool("Edit", {"file_path": str(self.root / "a.py")}))
+
+    def test_primary_denies_sibling_prefix_dir_of_home(self):
+        self.primary()
+        self.assertTrue(self.deny(self.pretool("Edit", {"file_path": str(self.sb) + "X/a.py"})))
+
     def test_primary_denies_agent_while_pending(self):
         self.primary()
         self.assertTrue(self.deny(self.pretool("Agent", {"subagent_type": "general-purpose"})))
