@@ -89,7 +89,7 @@ changed skills are re-profiled. A version bump that leaves a skill's text alone 
 {"enforce": "primary"}
 ```
 
-In `primary` mode the gate holds until `record_choice` is called, then stays quiet until a later prompt touches an overlap area again. `record_choice` also accepts `direct`: you declined every skill and Claude does the work itself. It counts as a recorded choice and is not counted as an override in `/switchboard:audit`. The cap is the same as for skills: at most 2 denials per session per 10 minutes, so an agent that cannot ask you is never stuck. `Read`, `Grep`, `Glob` and `Bash` are never gated, nor is any `Edit`, `Write` or `NotebookEdit` under `~/.switchboard`, so you can always turn this off through Claude. Skills you typed as `/name` are never gated.
+In `primary` mode the gate holds until `record_choice` is called, then stays quiet for 10 minutes; after that, a later prompt that touches an overlap area gates again. `record_choice` also accepts `direct`: you declined every skill and Claude does the work itself. It counts as a recorded choice and is not counted as an override in `/switchboard:audit`. The cap is the same as for skills: at most 2 denials per session per 10 minutes, so an agent that cannot ask you is never stuck. `Read`, `Grep`, `Glob` and `Bash` are never gated, nor is any `Edit`, `Write` or `NotebookEdit` under `~/.switchboard`, so you can always turn this off through Claude. Skills you typed as `/name` are never gated.
 
 ## Commands
 
