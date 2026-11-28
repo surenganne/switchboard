@@ -200,7 +200,7 @@ class ScanTest(unittest.TestCase):
         self.assertNotEqual(before["user:alpha"], after["user:alpha"])
 
     def test_hash_changes_when_only_a_bundled_script_changes(self):
-        for suffix in (".py", ".sh", ".ts", ".psm1", ".psd1"):
+        for suffix in (".py", ".sh", ".ts", ".ps1", ".psm1", ".psd1"):
             with self.subTest(suffix=suffix):
                 script = self.ch / "skills/alpha/scripts" / ("helper" + suffix)
                 write(script, "v1")
