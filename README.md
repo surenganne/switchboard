@@ -77,7 +77,7 @@ some are waiting.
 
 | Step | Who | What happens |
 |---|---|---|
-| **1 · Scan** | Switchboard | At session start, a hook lists your user, project and enabled-plugin skills, commands and agents (subagents), and fingerprints each one (a skill's main file plus every `.md` in its folder; a command's or agent's own file). |
+| **1 · Scan** | Switchboard | At session start, a hook lists your user, project and enabled-plugin skills, commands and agents (subagents), and fingerprints each one. Skills include Markdown and supported scripts in their folders. Commands and agents use their own files. |
 | **2 · Profile** | Claude | `/switchboard:profile` has Claude fill a fixed schema per skill. A validator accepts only known fields, values from fixed lists and short text, so a skill's own text cannot steer the router. |
 | **3 · Route** | Claude + Switchboard | Before Claude uses a skill in a task area where several profiled skills overlap, it describes the task (category, role, targets, focus, stack) to the local `route` tool. Skills whose role matches the task (`performs` by default; `assists` for help around a task, such as answering review comments) rank first, then by how much of the task each covers. `route` returns up to 10 candidates, each with its kind and how to start it (the Skill tool, or the Agent tool for an agent), and tells Claude to offer the best 2–3 with AskUserQuestion. If Claude skips routing or asking, a hook blocks the skill until a choice is recorded (at most twice per 10 minutes, so it never gets stuck). By default Agent calls are not blocked, since skills start agents mid-workflow; they are only logged for hygiene (see `enforce` below for `primary` mode). When your prompt looks like work in an overlapping area (review, debugging, tests, new features, refactors, release…), a prompt hook also reminds Claude to route even if it was about to do the work without a skill; the prompt is matched in memory and never stored. |
 | **4 · Pick** | You | Claude shows the top two or three with a one-line reason each, and you choose. |
@@ -86,9 +86,9 @@ some are waiting.
 Skills you name yourself (typing `/review` or `/ecc:code-review` in your message) are never routed: a prompt
 hook notes the names you typed, and the routing reminder lets those skills straight through for the session.
 
-**When a plugin updates,** the fingerprint of any skill whose text changed no longer matches its profile.
-That skill is marked as changed, the next session start offers `/switchboard:profile`, and only the
-changed skills are re-profiled. A version bump that leaves a skill's text alone does not trigger anything.
+**When a plugin updates,** an edit to a fingerprinted file marks the skill as changed.
+The next session start offers `/switchboard:profile` for those skills. The update to script fingerprinting
+can trigger a one-time re-profile for skills that already bundle supported scripts.
 
 ### The `enforce` setting
 
@@ -328,8 +328,9 @@ shows which one you picked last time, so overlapping skills are compared on more
   `general-purpose` and `Explore`) have no files on disk, so they are not routed either.
 - An agent named like a skill or command from the same source gets the id `<source>:agent:<name>` (the skill
   or command keeps `<source>:<name>`); both are routed.
-- Fingerprints cover a skill's `.md` files only, so an update that changes only its scripts does not mark it
-  for re-profiling.
+- The scanner considers up to 200 companion files per skill, with Markdown first, and caps each file at
+  1,000,000 bytes. Script suffixes include `.py`, `.sh`, `.bash`, `.zsh`, `.ps1`, `.js`, `.cjs`, `.mjs`,
+  `.jsx`, `.ts`, and `.tsx`.
 - Hygiene suggests whole plugins, not single plugin skills. Its token figures are estimates (about 4
   characters per token) and leave out MCP tools and hooks.
 

@@ -63,6 +63,7 @@ def project_source(project_dir: Path) -> str:
 
 FM_RE = re.compile(r"^---\s*\n.*?\n---\s*(\n|$)", re.S)
 MAX_EXTRA_FILES, MAX_FILE_BYTES = 200, 1_000_000
+SCRIPT_SUFFIXES = {".bash", ".cjs", ".js", ".jsx", ".mjs", ".ps1", ".py", ".sh", ".ts", ".tsx", ".zsh"}
 
 
 def _first_line(text: str) -> str:
@@ -75,15 +76,24 @@ def _first_line(text: str) -> str:
 
 
 def _hash(path: Path, kind: str, data: bytes) -> str:
-    """A skill's hash covers every .md in its folder (profiling reads them); a command's, its own file."""
+    """Hash a skill and its bounded companion files, or a standalone command or agent."""
     h = hashlib.sha256(data)
     if kind == "skill":
-        extra = sorted(p for p in path.parent.rglob("*.md") if p != path and p.is_file())[:MAX_EXTRA_FILES]
+        extra = sorted(
+            (p for p in path.parent.rglob("*")
+             if p != path and (p.match("*.md") or (p.suffix.lower() in SCRIPT_SUFFIXES and not p.is_symlink()))
+             and p.is_file()),
+            key=lambda p: (not p.match("*.md"), p),
+        )[:MAX_EXTRA_FILES]
         for p in extra:
             try:
-                if p.stat().st_size <= MAX_FILE_BYTES:
+                if p.stat().st_size > MAX_FILE_BYTES:
+                    continue
+                with p.open("rb") as source:
+                    content = source.read(MAX_FILE_BYTES + 1)
+                if len(content) <= MAX_FILE_BYTES:
                     # fsencode: a non-UTF-8 filename must not crash the whole scan
-                    h.update(b"\0" + os.fsencode(p.relative_to(path.parent)) + b"\0" + p.read_bytes())
+                    h.update(b"\0" + os.fsencode(p.relative_to(path.parent)) + b"\0" + content)
             except OSError:
                 continue
     return h.hexdigest()[:16]
@@ -136,7 +146,7 @@ def plugin_mcp(claude_home: Path, project_dir: Path | None) -> dict[str, list[st
 
 
 def list_skills(claude_home: Path, project_dir: Path | None, hashed: bool = True) -> list[dict]:
-    """hashed=False skips content hashes (reading every .md in each skill folder): hooks need only ids, fast."""
+    """Skip reading companion files for hooks that only need IDs with hashed=False."""
     out: dict[str, dict] = {}
 
     def add(source, name, kind, path, fm=False):

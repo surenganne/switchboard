@@ -4,8 +4,9 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from switchboard import paths, scan_claude, usage
+from switchboard import paths, profiles, scan_claude, usage
 
 
 def write(p, text):
@@ -197,6 +198,35 @@ class ScanTest(unittest.TestCase):
         write(self.ch / "skills/alpha/reference.md", "v2")
         after = {s["id"]: s["content_hash"] for s in scan_claude.list_skills(self.ch, self.proj)}
         self.assertNotEqual(before["user:alpha"], after["user:alpha"])
+
+    def test_hash_changes_when_only_a_bundled_script_changes(self):
+        for suffix in (".py", ".sh", ".ts"):
+            with self.subTest(suffix=suffix):
+                script = self.ch / "skills/alpha/scripts" / ("helper" + suffix)
+                write(script, "v1")
+                before = scan_claude.current()["user:alpha"]["content_hash"]
+                write(script, "v2")
+                inventory = scan_claude.current()
+                self.assertNotEqual(before, inventory["user:alpha"]["content_hash"])
+                with patch.object(profiles, "load_all", return_value={"user:alpha": {"content_hash": before}}):
+                    pending = {item["id"]: item["reason"] for item in profiles.pending(inventory)}
+                self.assertEqual(pending["user:alpha"], "changed")
+
+    def test_hash_skips_oversized_scripts_and_unsupported_assets(self):
+        folder = self.ch / "skills/alpha"
+        with patch.object(scan_claude, "MAX_FILE_BYTES", 8):
+            before = scan_claude.current()["user:alpha"]["content_hash"]
+            write(folder / "large.py", "x" * 9)
+            write(folder / "image.png", "asset")
+            self.assertEqual(before, scan_claude.current()["user:alpha"]["content_hash"])
+
+    def test_hash_prioritizes_markdown_at_the_file_limit(self):
+        folder = self.ch / "skills/alpha"
+        with patch.object(scan_claude, "MAX_EXTRA_FILES", 1):
+            write(folder / "z-notes.md", "notes")
+            before = scan_claude.current()["user:alpha"]["content_hash"]
+            write(folder / "a-helper.sh", "script")
+            self.assertEqual(before, scan_claude.current()["user:alpha"]["content_hash"])
 
     def test_unhashed_scan_lists_same_skills_without_hashes(self):
         # hooks scan with hashed=False so a prompt never waits on reading every skill folder
