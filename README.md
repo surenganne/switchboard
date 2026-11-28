@@ -15,7 +15,9 @@ claude plugin install switchboard@switchboard
 # restart Claude Code, then run: /switchboard:profile
 ```
 
-<!-- demo GIF goes here once recorded -->
+![Illustrative animation: Switchboard asking which of three installed code-review skills to use](docs/images/demo.gif)
+
+<sub>Illustrative: a re-creation of the example below, not a recording of a real session.</sub>
 
 You install skills and plugins from many places, and plenty of them overlap: five code reviewers, three
 debuggers, a few planners. Claude Code sees only each skill's one-line description, so it picks between
