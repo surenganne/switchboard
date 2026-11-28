@@ -328,9 +328,10 @@ shows which one you picked last time, so overlapping skills are compared on more
   `general-purpose` and `Explore`) have no files on disk, so they are not routed either.
 - An agent named like a skill or command from the same source gets the id `<source>:agent:<name>` (the skill
   or command keeps `<source>:<name>`); both are routed.
-- The scanner considers up to 200 companion files per skill, with Markdown first, and caps each file at
-  1,000,000 bytes. Script suffixes include `.py`, `.sh`, `.bash`, `.zsh`, `.ps1`, `.js`, `.cjs`, `.mjs`,
-  `.jsx`, `.ts`, and `.tsx`.
+- The scanner considers up to 200 companion files per skill, with Markdown first, and skips files larger than
+  1,000,000 bytes. It recognizes `.py`, `.sh`, `.bash`, `.zsh`, `.ps1`, `.psd1`, `.psm1`, `.js`, `.cjs`,
+  `.mjs`, `.jsx`, `.ts`, and `.tsx`. The script scan skips dependency and cache folders such as `node_modules`,
+  `.venv`, `__pycache__`, and `.git`. It skips script symlinks to keep the new scan within the skill folder.
 - Hygiene suggests whole plugins, not single plugin skills. Its token figures are estimates (about 4
   characters per token) and leave out MCP tools and hooks.
 

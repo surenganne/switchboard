@@ -200,7 +200,7 @@ class ScanTest(unittest.TestCase):
         self.assertNotEqual(before["user:alpha"], after["user:alpha"])
 
     def test_hash_changes_when_only_a_bundled_script_changes(self):
-        for suffix in (".py", ".sh", ".ts"):
+        for suffix in (".py", ".sh", ".ts", ".psm1", ".psd1"):
             with self.subTest(suffix=suffix):
                 script = self.ch / "skills/alpha/scripts" / ("helper" + suffix)
                 write(script, "v1")
@@ -227,6 +227,29 @@ class ScanTest(unittest.TestCase):
             before = scan_claude.current()["user:alpha"]["content_hash"]
             write(folder / "a-helper.sh", "script")
             self.assertEqual(before, scan_claude.current()["user:alpha"]["content_hash"])
+
+    def test_dependency_and_cache_scripts_do_not_use_the_file_budget(self):
+        folder = self.ch / "skills/alpha"
+        with patch.object(scan_claude, "MAX_EXTRA_FILES", 1):
+            for directory in (".git", ".venv", "__pycache__", "node_modules"):
+                write(folder / directory / "nested" / "file.py", "ignore")
+            script = folder / "scripts" / "entry.py"
+            write(script, "v1")
+            before = scan_claude.current()["user:alpha"]["content_hash"]
+            write(script, "v2")
+            self.assertNotEqual(before, scan_claude.current()["user:alpha"]["content_hash"])
+
+    def test_hash_does_not_read_scripts_linked_outside_the_skill(self):
+        target = self.root / "outside.py"
+        write(target, "v1")
+        before = scan_claude.current()["user:alpha"]["content_hash"]
+        try:
+            os.symlink(target, self.ch / "skills/alpha/helper.py")
+        except OSError as exc:
+            if getattr(exc, "winerror", None) == 1314:
+                self.skipTest("Creating symlinks requires additional privileges on Windows")
+            raise
+        self.assertEqual(before, scan_claude.current()["user:alpha"]["content_hash"])
 
     def test_unhashed_scan_lists_same_skills_without_hashes(self):
         # hooks scan with hashed=False so a prompt never waits on reading every skill folder
