@@ -180,6 +180,16 @@ class RouteTest(unittest.TestCase):
         only_one = {k: v for k, v in FIX["inventory"].items() if k == "user:review"}
         self.assertEqual(route.overlap_categories(FIX["profiles"], only_one), [])
 
+    def test_overlap_skills(self):
+        got = route.overlap_skills(FIX["profiles"], FIX["inventory"])
+        self.assertEqual(list(got), route.overlap_categories(FIX["profiles"], FIX["inventory"]))
+        want = sorted(sid for sid, p in FIX["profiles"].items()
+                      if sid in FIX["inventory"] and "code-review" in (p.get("categories") or []))
+        self.assertEqual(got["code-review"], want)
+        self.assertGreaterEqual(len(want), 2)
+        only_one = {k: v for k, v in FIX["inventory"].items() if k == "user:review"}
+        self.assertEqual(route.overlap_skills(FIX["profiles"], only_one), {})
+
     def test_missing_category_rejected(self):
         with self.assertRaises(ValueError):
             route.route({"targets": ["pr"]}, FIX["profiles"], FIX["inventory"], [])

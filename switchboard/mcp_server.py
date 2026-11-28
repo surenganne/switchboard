@@ -12,7 +12,7 @@ from datetime import date  # noqa: E402
 
 from switchboard import choices, hygiene, profiles, report, route, scan_claude, usage  # noqa: E402
 
-VERSION = "0.8.1"
+VERSION = "0.8.2"
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")  # newest first; the subset this server speaks
 OBJ = {"type": "object"}
 STRS = {"type": "array", "items": {"type": "string"}}
@@ -87,7 +87,7 @@ TOOLS = [
                             "target_tag": {"type": "string", "description": "A lowercase tag (a-z0-9.+#- only, "
                                           "at most 40 chars)"}},
                            ["id", "content_hash", "target_tag"])},
-    {"name": "status", "description": "Counts of skills, profiles, pending and overlapping categories.", "inputSchema": schema()},
+    {"name": "status", "description": "Counts of skills, profiles, pending and overlapping categories, with the entries that overlap in each.", "inputSchema": schema()},
     {"name": "audit", "description": "Task types where the user keeps passing over the top pick.", "inputSchema": schema()},
     {"name": "forget", "description": "Delete the local choice log. Pass confirm: true only after the user agreed.",
      "inputSchema": schema({"confirm": {"type": "boolean"}}, ["confirm"])},
@@ -185,6 +185,7 @@ def call_tool(name: str, args: dict):
                 "missing_focus_tag": len(profiles.pending_focus_tags(inv)),
                 "missing_target_tag": len(profiles.pending_target_tags(inv)),
                 "pending": len(profiles.pending(inv)), "overlap_categories": route.overlap_categories(profs, inv),
+                "overlap_skills": route.overlap_skills(profs, inv),
                 "hygiene": hygiene_status(hygiene_report())}
     if name == "hygiene":
         return hygiene_report(args.get("days", hygiene.DEFAULT_DAYS))
