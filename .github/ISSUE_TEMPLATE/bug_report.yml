@@ -4,7 +4,7 @@ labels: [bug]
 body:
   - type: input
     id: version
-    attributes: {label: "Switchboard version", placeholder: "0.8.1 (from .claude-plugin/plugin.json)"}
+    attributes: {label: "Switchboard version", placeholder: "0.8.2 (from .claude-plugin/plugin.json)"}
     validations: {required: true}
   - type: input
     id: env

@@ -110,6 +110,7 @@ class McpTest(unittest.TestCase):
         err, st = self.call("status")
         self.assertEqual((st["skills"], st["profiled"], st["pending"]), (4, 1, 3))
         self.assertEqual(st["by_kind"], {"skill": 3, "command": 1})
+        self.assertEqual(st["overlap_skills"], {})  # one profiled entry overlaps nothing
         first, rest = self.call("pending_profiles", limit=2)[1], self.call("pending_profiles", limit=2, offset=2)[1]
         self.assertEqual((len(first["pending"]), first["next_offset"], len(rest["pending"])), (2, 2, 1))
         self.assertNotIn("next_offset", rest)  # last page
@@ -126,6 +127,17 @@ class McpTest(unittest.TestCase):
         err, refused = self.call("forget")  # deleting needs an explicit confirm
         self.assertEqual((refused["removed"], refused["error"][:8]), (0, "confirm:"))
         self.assertEqual(self.call("forget", confirm=True)[1], {"removed": 1, "usage_removed": 0})
+
+    def test_status_lists_overlapping_skills(self):
+        pend = self.call("pending_profiles", limit=20)[1]["pending"]
+        skills = sorted((p for p in pend if p["kind"] == "skill"), key=lambda p: p["id"])[:2]
+        for p in skills:
+            prof = {"id": p["id"], "source": p["source"], "content_hash": p["content_hash"],
+                    "categories": ["code-review"], "does": "Reviews things.", "targets": ["pr"],
+                    "focus": ["correctness"], "depth": "standard", "cost": "single-pass", "stack": ["any"],
+                    "best_for": [], "not_for": []}
+            self.assertTrue(self.call("save_profile", profile=prof)[1]["saved"])
+        self.assertEqual(self.call("status")[1]["overlap_skills"], {"code-review": [p["id"] for p in skills]})
 
     def test_native_skill_reported_profiled_and_routed(self):
         err, rep = self.call("report_native_skills", skills=[

@@ -2,6 +2,10 @@
 
 Notable changes in each release. Full notes: [Releases](https://github.com/surenganne/switchboard/releases).
 
+## [0.8.2](https://github.com/surenganne/switchboard/releases/tag/v0.8.2) - 2026-11-28
+
+- `/switchboard:status` lists the overlapping entries in each task area ([#39](https://github.com/surenganne/switchboard/pull/39))
+
 ## [0.8.1](https://github.com/surenganne/switchboard/releases/tag/v0.8.1) - 2026-11-23
 
 - Docs: the primary gate stays quiet for 10 minutes after a recorded choice ([#21](https://github.com/surenganne/switchboard/pull/21))

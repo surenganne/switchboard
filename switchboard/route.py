@@ -105,3 +105,10 @@ def route(task: dict, profiles: dict, inventory: dict, past: list[dict]) -> dict
 def overlap_categories(profiles: dict, inventory: dict) -> list[str]:
     n = Counter(c for sid, p in profiles.items() if sid in inventory for c in set(p.get("categories") or []))
     return sorted(c for c, k in n.items() if k >= 2)
+
+
+def overlap_skills(profiles: dict, inventory: dict) -> dict[str, list[str]]:
+    """Each overlapping task area mapped to the sorted ids of the installed entries profiled in it."""
+    areas = overlap_categories(profiles, inventory)
+    return {c: sorted(sid for sid, p in profiles.items() if sid in inventory and c in (p.get("categories") or []))
+            for c in areas}
