@@ -3,7 +3,7 @@
   "owner": {
     "name": "Switchboard contributors"
   },
-  "description": "Switchboard: route between overlapping Claude Code skills.",
+  "description": "Pick the right Claude Code skill when several fit. Local only: no network, no API keys, no telemetry.",
   "plugins": [
     {
       "name": "switchboard",
