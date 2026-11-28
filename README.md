@@ -1,8 +1,21 @@
 # Switchboard
 
 [![tests](https://github.com/surenganne/switchboard/actions/workflows/test.yml/badge.svg)](https://github.com/surenganne/switchboard/actions/workflows/test.yml)
+[![release](https://img.shields.io/github/v/release/surenganne/switchboard)](https://github.com/surenganne/switchboard/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)
+![no network](https://img.shields.io/badge/network-none-success.svg)
 
-**Pick the right skill when several fit.** A local router for Claude Code skills and plugins.
+**A Claude Code plugin that picks the right skill when several installed skills fit the same task.**
+Local only: no network, no API keys, no telemetry, Python standard library.
+
+```sh
+claude plugin marketplace add surenganne/switchboard
+claude plugin install switchboard@switchboard
+# restart Claude Code, then run: /switchboard:profile
+```
+
+<!-- demo GIF goes here once recorded -->
 
 You install skills and plugins from many places, and plenty of them overlap: five code reviewers, three
 debuggers, a few planners. Claude Code sees only each skill's one-line description, so it picks between
