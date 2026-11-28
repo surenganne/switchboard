@@ -1,0 +1,20 @@
+name: Bug report
+description: Something Switchboard did wrong
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: {label: "Switchboard version", placeholder: "0.8.1 (from .claude-plugin/plugin.json)"}
+    validations: {required: true}
+  - type: input
+    id: env
+    attributes: {label: "Claude Code version, OS and python3 version"}
+  - type: textarea
+    id: what
+    attributes:
+      label: "What happened, and what you expected"
+      description: Please do not paste prompts, code, or anything private. Skill ids and command output are enough.
+    validations: {required: true}
+  - type: textarea
+    id: repro
+    attributes: {label: "Steps to reproduce"}
