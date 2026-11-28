@@ -34,7 +34,7 @@ Several installed skills fit this. Which one?
 
 - [Install](#install) · [First run](#first-run) · [How it works](#how-it-works) · [Commands](#commands)
 - [What you'll see](#what-youll-see) · [Activity report](#activity-report) · [Privacy](#privacy)
-- [Limits](#limits-in-v07) · [Update](#update) · [Uninstall](#uninstall) · [Development](#development)
+- [Limits](#limits) · [Update](#update) · [Uninstall](#uninstall) · [Development](#development)
 
 ## Install
 
@@ -290,7 +290,7 @@ No prompt text and no code are stored. Feature fields keep only values from the 
 recording, create `~/.switchboard/settings.json` with `{"record_choices": false}` and/or
 `{"record_usage": false}`. Past session transcripts are never read.
 
-## Limits in v0.8
+## Limits
 
 - `primary` mode cannot force Claude to call Switchboard; it only holds other actions until routing has happened.
 - Claude can turn `primary` mode off by editing `~/.switchboard/settings.json`, which is exempt from the gate by design.
