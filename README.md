@@ -319,7 +319,9 @@ shows which one you picked last time, so overlapping skills are compared on more
 - Area detection is a keyword guess, so a prompt that matches no area is never gated.
 - `Bash` is not gated (it cannot tell a read from a write), so a shell command that writes files is not caught.
 - Other plugins' hooks run independently and in no guaranteed order. With a second gate (for example ECC's GateGuard) you get two prompts.
-- Claude Code only. The scanner sits behind a small interface (`list_skills`) so other platforms can follow.
+- Claude Code only. The scanner sits behind a small interface (`list_skills`) so other platforms can follow;
+  DeepSeek Harness (DSH) has a sketch in `switchboard/scan_dsh.py` with the same interface (user skills at
+  `~/.dsh/skills`, project skills at `.dsh/skills`), not yet wired into the hooks.
 - Built-in Claude Code skills (such as `code-review` and `simplify`) have no files on disk, so the scanner
   can't find them by itself. `/switchboard:profile` now reports them from the session's own skill listing
   (via the `report_native_skills` tool) so they can still be profiled and routed to; a name already backed
