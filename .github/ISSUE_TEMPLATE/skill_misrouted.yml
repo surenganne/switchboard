@@ -1,0 +1,13 @@
+name: Wrong skill suggested
+description: Switchboard ranked a worse-fitting skill first
+labels: [enhancement]
+body:
+  - type: input
+    id: area
+    attributes: {label: "Task area (e.g. code-review, debugging)"}
+  - type: textarea
+    id: offered
+    attributes: {label: "Skills offered (ids, in order) and the one that should have won"}
+  - type: textarea
+    id: audit
+    attributes: {label: "Output of /switchboard:audit (optional)"}
