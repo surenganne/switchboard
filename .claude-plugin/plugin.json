@@ -11,6 +11,12 @@
   "keywords": [
     "skills",
     "routing",
-    "claude-code"
+    "claude-code",
+    "skill-router",
+    "plugins",
+    "subagents",
+    "mcp",
+    "local-first",
+    "privacy"
   ]
 }
