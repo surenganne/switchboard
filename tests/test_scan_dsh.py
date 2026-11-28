@@ -101,7 +101,7 @@ class ScanDshTest(unittest.TestCase):
 
     def test_write_inventory_shape(self):
         p = scan_dsh.write_inventory(scan_dsh.list_skills(self.dsh, self.proj))
-        self.assertEqual(p, paths.home() / "inventory.json")
+        self.assertEqual(p, paths.home() / "inventory-dsh.json")
         data = json.loads(p.read_text())
         self.assertEqual(data["version"], 1)
         self.assertIn("user:alpha", data["skills"])

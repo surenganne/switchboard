@@ -51,7 +51,7 @@ def list_skills(dsh_home: Path, project_dir: Path | None, hashed: bool = True) -
     """hashed=False skips content hashes (reading every .md in each skill folder): hooks need only ids, fast."""
     out: dict[str, dict] = {}
 
-    def add(source, name, path):
+    def add(source, name, path, fm=False):
         sid = f"{source}:{name}"
         if sid in out:
             return
@@ -60,7 +60,8 @@ def list_skills(dsh_home: Path, project_dir: Path | None, hashed: bool = True) -
         except OSError:
             return
         text = data.decode("utf-8", errors="replace")
-        fm = frontmatter.read(path)
+        if fm is False:  # False: not parsed yet (None means the file has no frontmatter)
+            fm = frontmatter.read(path)
         if fm is None:  # without frontmatter a skill is not loadable
             return
         desc = " ".join(str(fm.get("description") or "").split()) or _first_line(text)
@@ -73,7 +74,8 @@ def list_skills(dsh_home: Path, project_dir: Path | None, hashed: bool = True) -
 
     def skills_in(d, source):
         for sk in sorted(d.glob("*/SKILL.md")):
-            add(source, str((frontmatter.read(sk) or {}).get("name") or sk.parent.name), sk)
+            fm = frontmatter.read(sk)
+            add(source, str((fm or {}).get("name") or sk.parent.name), sk, fm)
 
     skills_in(dsh_home / "skills", "user")
 
@@ -95,6 +97,10 @@ def current(hashed: bool = True) -> dict:
 
 
 def write_inventory(skills: list[dict]) -> Path:
-    p = paths.home() / "inventory.json"
+    """Write DSH skills to their own inventory file. `scan_claude` writes Claude's inventory at
+    SessionStart and `usage.cached_inventory()` reads it, so overwriting `inventory.json` from here
+    would replace the Claude inventory with DSH-only skills; DSH skills land in `inventory-dsh.json`
+    until the scanner is wired into the hooks."""
+    p = paths.home() / "inventory-dsh.json"
     paths.write_private(p, json.dumps({"version": 1, "skills": {s["id"]: s for s in skills}}, indent=1, sort_keys=True))
     return p
