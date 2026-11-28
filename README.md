@@ -303,6 +303,13 @@ No prompt text and no code are stored. Feature fields keep only values from the 
 recording, create `~/.switchboard/settings.json` with `{"record_choices": false}` and/or
 `{"record_usage": false}`. Past session transcripts are never read.
 
+## FAQ
+
+**Why not just write better skill descriptions?** Claude Code chooses between skills from their one-line
+descriptions. Skills that come from someone else's plugin aren't yours to rewrite, and a one-liner can't carry
+a skill's depth, cost or the stack it was built for. Switchboard profiles each skill from its full files and
+shows which one you picked last time, so overlapping skills are compared on more than a sentence.
+
 ## Limits
 
 - `primary` mode cannot force Claude to call Switchboard; it only holds other actions until routing has happened.
