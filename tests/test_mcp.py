@@ -128,6 +128,17 @@ class McpTest(unittest.TestCase):
         self.assertEqual((refused["removed"], refused["error"][:8]), (0, "confirm:"))
         self.assertEqual(self.call("forget", confirm=True)[1], {"removed": 1, "usage_removed": 0})
 
+    def test_status_lists_overlapping_skills(self):
+        pend = self.call("pending_profiles", limit=20)[1]["pending"]
+        skills = sorted((p for p in pend if p["kind"] == "skill"), key=lambda p: p["id"])[:2]
+        for p in skills:
+            prof = {"id": p["id"], "source": p["source"], "content_hash": p["content_hash"],
+                    "categories": ["code-review"], "does": "Reviews things.", "targets": ["pr"],
+                    "focus": ["correctness"], "depth": "standard", "cost": "single-pass", "stack": ["any"],
+                    "best_for": [], "not_for": []}
+            self.assertTrue(self.call("save_profile", profile=prof)[1]["saved"])
+        self.assertEqual(self.call("status")[1]["overlap_skills"], {"code-review": [p["id"] for p in skills]})
+
     def test_native_skill_reported_profiled_and_routed(self):
         err, rep = self.call("report_native_skills", skills=[
             {"name": "code-review", "description": "Review the current diff for correctness bugs."},

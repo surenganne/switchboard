@@ -183,10 +183,8 @@ class RouteTest(unittest.TestCase):
     def test_overlap_skills(self):
         got = route.overlap_skills(FIX["profiles"], FIX["inventory"])
         self.assertEqual(list(got), route.overlap_categories(FIX["profiles"], FIX["inventory"]))
-        want = sorted(sid for sid, p in FIX["profiles"].items()
-                      if sid in FIX["inventory"] and "code-review" in (p.get("categories") or []))
-        self.assertEqual(got["code-review"], want)
-        self.assertGreaterEqual(len(want), 2)
+        self.assertEqual(got["code-review"], ["builtin:code-review", "ecc:code-review", "ecc:orch-review",
+                                              "ecc:review-pr", "ponytail:ponytail-review", "user:review"])
         only_one = {k: v for k, v in FIX["inventory"].items() if k == "user:review"}
         self.assertEqual(route.overlap_skills(FIX["profiles"], only_one), {})
 
